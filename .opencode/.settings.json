@@ -1,0 +1,8 @@
+{
+    "mcp": {
+        "kite": {
+            "type": "remote",
+            "url": "https://mcp.kite.trade/mcp"
+        }
+    }
+}
