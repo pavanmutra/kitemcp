@@ -19,6 +19,8 @@ function readJsonFile(filepath) {
 const portfolioData  = readJsonFile(`reports/${reportDate}_portfolio_snapshot.json`);
 const valueData      = readJsonFile(`reports/${reportDate}_value_screen.json`);
 const commodityData  = readJsonFile(`reports/${reportDate}_commodity_opportunities.json`);
+const oppData        = readJsonFile(`reports/${reportDate}_opportunities.json`);
+const newsOppData    = readJsonFile(`reports/${reportDate}_news_opportunities.json`);
 
 // Build IV lookup map: symbol → { margin_of_safety, action, graham_number }
 const ivMap = {};
@@ -289,6 +291,39 @@ commodities.forEach(c => {
         recommendation: c.recommendation
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKET INTELLIGENCE SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+const marketSheet = wb.addWorksheet('Market Intelligence', {
+    properties: { tabColor: { argb: 'FFD600' } }
+});
+
+// COMMODITIES SUB-SECTION
+marketSheet.addRow(['COMMODITY MARKET STATUS']).font = { bold: true, size: 14 };
+marketSheet.addRow(['Name', 'Price', 'Trend', 'Action']);
+commodities.forEach(c => {
+    marketSheet.addRow([c.symbol || c.name, c.price, c.trend, c.recommendation || c.action]);
+});
+marketSheet.addRow([]);
+
+// OPPORTUNITIES SUB-SECTION
+marketSheet.addRow(['SCANNED OPPORTUNITIES']).font = { bold: true, size: 14 };
+marketSheet.addRow(['Symbol', 'Horizon', 'Target', 'Upside %', 'Catalyst', 'Recommendation']);
+(oppData?.opportunities || []).forEach(o => {
+    marketSheet.addRow([o.symbol, o.horizon, o.target_3m || '-', o.upside_3m || '-', o.catalyst, o.recommendation]);
+});
+marketSheet.addRow([]);
+
+// NEWS SUB-SECTION
+marketSheet.addRow(['FINANCIAL NEWS SCANNER']).font = { bold: true, size: 14 };
+marketSheet.addRow(['Source', 'Headline', 'Impact Score', 'Type', 'Action']);
+(newsOppData?.news || []).forEach(n => {
+    marketSheet.addRow([n.source, n.headline, n.impact, n.type, n.action]);
+});
+
+marketSheet.addRow([]);
+marketSheet.addRow(['END OF REPORT']);
 
 const weeklySheet = wb.addWorksheet('Weekly Summary', {
     properties: { tabColor: { argb: '1565C0' } }

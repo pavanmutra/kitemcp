@@ -26,6 +26,7 @@ const valueData = readJsonFile(`reports/${reportDate}_value_screen.json`);
 const gttData = readJsonFile(`reports/${reportDate}_gtt_audit.json`);
 const oppData = readJsonFile(`reports/${reportDate}_opportunities.json`);
 const newsOppData = readJsonFile(`reports/${reportDate}_news_opportunities.json`);
+const commData = readJsonFile(`reports/${reportDate}_commodity_opportunities.json`);
 
 // Generate IMMEDIATE ACTIONS from other data sources
 const immediateActions = [];
@@ -72,7 +73,10 @@ if (valueData?.stocks) {
 // See immediateActionsFromHoldings() called after holdings is initialized.
 
 // Get news opportunities
-const newsOpportunities = newsOppData?.opportunities || [];
+const newsOpportunities = newsOppData?.news || [];
+
+// Get commodity data
+const commodities = commData?.commodities || [];
 
 // Use loaded data or fallback to defaults - map JSON keys to internal format
 const rawHoldings = portfolioData?.holdings || [
@@ -349,6 +353,37 @@ const doc = new Document({
             ]),
             new Paragraph({ children: [] }),
 
+            new Paragraph({ children: [] }),
+
+            new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("4. COMMODITY MARKET REVIEW")] }),
+            new Paragraph({ children: [new TextRun({ text: "Latest status of MCX commodities", bold: true, font: "Arial" })] }),
+            new Paragraph({ children: [] }),
+            ...(commodities.length > 0 ? [
+                new Table({
+                    width: { size: 9360, type: WidthType.DXA },
+                    columnWidths: [1872, 1872, 1872, 1872, 1872],
+                    rows: [
+                        new TableRow({ children: [
+                            createHeaderCell("Commodity", 1872),
+                            createHeaderCell("Price", 1872),
+                            createHeaderCell("Change %", 1872),
+                            createHeaderCell("Trend", 1872),
+                            createHeaderCell("Recommendation", 1872)
+                        ]}),
+                        ...commodities.map(c => new TableRow({ children: [
+                            createCell(c.symbol || c.name, 1872),
+                            createCell(c.price?.toString() || "-", 1872),
+                            createCell(c.change_percent ? c.change_percent + "%" : "-", 1872, { color: c.change_percent >= 0 ? "00B050" : "C00000" }),
+                            createCell(c.trend, 1872),
+                            createCell(c.recommendation || c.action, 1872, { fill: "F0F2F5" })
+                        ]}))
+                    ]
+                })
+            ] : [
+                new Paragraph({ children: [new TextRun({ text: "No commodity data available for today.", font: "Arial", color: "666666" })] })
+            ]),
+            new Paragraph({ children: [] }),
+
             new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("5. GTT PROTECTION STATUS")] }),
             new Paragraph({ children: [new TextRun({ 
                 text: `${activeGTTs} active GTT orders | ${protectedHoldings} holdings protected`, 
@@ -366,21 +401,23 @@ const doc = new Document({
             ...(opportunities.length > 0 ? [
                 new Table({
                     width: { size: 9360, type: WidthType.DXA },
-                    columnWidths: [1560, 1560, 1560, 1560, 1560],
+                    columnWidths: [1300, 1400, 1200, 1000, 3200, 1260],
                     rows: [
                         new TableRow({ children: [
-                            createHeaderCell("Stock", 1560),
-                            createHeaderCell("Horizon", 1560),
-                            createHeaderCell("Target 3M", 1560),
-                            createHeaderCell("Upside", 1560),
-                            createHeaderCell("Recommendation", 1560)
+                            createHeaderCell("Stock", 1300),
+                            createHeaderCell("Horizon", 1400),
+                            createHeaderCell("Target", 1200),
+                            createHeaderCell("Upside", 1000),
+                            createHeaderCell("Catalyst", 3200),
+                            createHeaderCell("Recommendation", 1260)
                         ]}),
-                        ...opportunities.slice(0, 5).map(o => new TableRow({ children: [
-                            createCell(o.symbol, 1560),
-                            createCell(o.horizon, 1560),
-                            createCell(o.target_3m ? "\u20B9" + o.target_3m : "-", 1560),
-                            createCell(o.upside_3m ? "+" + o.upside_3m + "%" : "-", 1560, { color: "00B050" }),
-                            createCell(o.recommendation, 1560, { fill: "C6EFCE" })
+                        ...opportunities.slice(0, 10).map(o => new TableRow({ children: [
+                            createCell(o.symbol, 1300),
+                            createCell(o.horizon, 1400),
+                            createCell(o.target_3m ? "\u20B9" + o.target_3m : "-", 1200),
+                            createCell(o.upside_3m ? "+" + o.upside_3m + "%" : "-", 1000, { color: "00B050" }),
+                            createCell(o.catalyst || "-", 3200),
+                            createCell(o.recommendation, 1260, { fill: "C6EFCE" })
                         ]}))
                     ]
                 })
@@ -394,21 +431,21 @@ const doc = new Document({
             ...(newsOpportunities.length > 0 ? [
                 new Table({
                     width: { size: 9360, type: WidthType.DXA },
-                    columnWidths: [1560, 1560, 1560, 1560, 1560],
+                    columnWidths: [1200, 4000, 800, 1800, 1560],
                     rows: [
                         new TableRow({ children: [
-                            createHeaderCell("Stock", 1560),
-                            createHeaderCell("Type", 1560),
-                            createHeaderCell("Headline", 1560),
-                            createHeaderCell("Impact", 1560),
+                            createHeaderCell("Source", 1200),
+                            createHeaderCell("Headline", 4000),
+                            createHeaderCell("Score", 800),
+                            createHeaderCell("Type", 1800),
                             createHeaderCell("Action", 1560)
                         ]}),
-                        ...newsOpportunities.slice(0, 5).map(o => new TableRow({ children: [
-                            createCell(o.symbol, 1560),
-                            createCell(o.type, 1560),
-                            createCell(o.headline?.substring(0, 30) + "..." || "-", 1560),
-                            createCell(o.impact_score ? o.impact_score + "/10" : "-", 1560),
-                            createCell(o.recommendation || "-", 1560, { fill: o.sentiment === "BULLISH" ? "C6EFCE" : "FFC7CE" })
+                        ...newsOpportunities.slice(0, 10).map(o => new TableRow({ children: [
+                            createCell(o.source || "News", 1200),
+                            createCell(o.headline || "-", 4000),
+                            createCell(o.impact ? o.impact + "/10" : "-", 800, { bold: true }),
+                            createCell(o.type || "-", 1800),
+                            createCell(o.action || "-", 1560, { fill: "F0F2F5" })
                         ]}))
                     ]
                 })
