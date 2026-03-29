@@ -518,6 +518,71 @@ ROOT CAUSE:
 
 ---
 
+### ❌ MISTAKE P-012 — Prompt Architecture Bugs Causing Agent Failures
+```
+DATE     : 2026-03-29
+WHAT HAPPENED:
+  Full audit of all 11 prompt files in prompts/ revealed 7 cross-cutting
+  architectural problems degrading agent performance across models:
+  
+  1. REDUNDANT PERSONA: Every prompt copy-pasted a 2-line analyst persona
+     (~50 tokens × 10 files = 500 wasted tokens per session)
+  2. NO IMPORT DIRECTIVE: No prompt told models to read _base.md first,
+     so core rules (R-01 through R-13) could be silently ignored
+  3. HARDCODED DATES: Example JSONs used "2026-03-26" — free/weak models
+     copied these literally instead of using today's date
+  4. NO ERROR RECOVERY: If KiteMCP or web search failed, agents halted
+     with no fallback path. No retry, no alternative source, no graceful degradation
+  5. WRONG GTT TRANSACTION TYPE: order_executor.md had GTT stop-loss example
+     with transaction_type: "BUY" — should be "SELL" for protective stop on
+     long positions. A BUY stop would ADD shares on price drop!
+  6. WRONG TAX RATE: excel_export.md said LTCG = 12.5% but _base.md said 10%.
+     Inconsistency between prompt files
+  7. NEGATIVE EPS NaN: intrinsic_value.md used Graham Number √(22.5 × EPS × BV)
+     without checking for negative EPS. √(negative) = NaN → broke calculations
+  8. gtt_manager.md was 69 lines — severely under-specified, missing trailing
+     stop formula, OCO examples, P-008 direction validation
+  9. opportunity_scanner.md had no JSON output format — only text blocks,
+     breaking create_daily_report.js which expects JSON
+  10. stock.yaml was legacy YAML — no agent imported it, _base.md had all
+      the same content. Dead file wasting context if loaded
+
+LOSS / IMPACT : Agents produced invalid JSON, wrong calculations, missed rules,
+  and wasted tokens. Free-tier models especially degraded.
+
+ROOT CAUSE:
+  Prompts grew organically without architectural review.
+  No single source of truth enforcement.
+  No import/dependency management between prompt files.
+
+⛔ NEVER DO:
+  - Copy-paste analyst persona into each prompt (use _base.md import)
+  - Use hardcoded dates in example JSON (use YYYY-MM-DD placeholder)
+  - Skip error recovery instructions in any agent prompt
+  - Use transaction_type "BUY" for stop-loss GTTs
+  - Calculate √(negative) without EPS guard
+  - Leave tax rates inconsistent between files
+
+✅ FIX / RULE ADDED:
+  All 10 agent prompts rewritten with:
+    [x] _base.md import directive at top
+    [x] Removed redundant analyst persona
+    [x] Dynamic date rule (never hardcode)
+    [x] Error recovery protocol per agent
+    [x] Output validation contract before saving JSON
+    [x] R-17: Negative EPS guard (skip Graham if EPS ≤ 0)
+    [x] R-18: GTT stop-loss transaction_type = "SELL"
+    [x] Fixed LTCG rate to 10% (aligned with _base.md)
+    [x] gtt_manager.md expanded from 69 → 190 lines
+    [x] opportunity_scanner.md now has proper JSON schema
+    [x] stock.yaml → stock_framework.md (markdown format)
+    [x] Model compatibility hints for free-tier models
+    [x] Data freshness rules (max age for each data type)
+    [x] Tool call reference table with exact MCP function signatures
+```
+
+---
+
 ## 📋 MASTER RULES DERIVED FROM ALL MISTAKES
 
 These rules are auto-checked by agents. Any violation = hard stop.
@@ -543,6 +608,12 @@ These rules are auto-checked by agents. Any violation = hard stop.
  16  ALWAYS verify stock name before analysis           P-009
  17  Use flexible field mapping for JSON schema changes  P-010
  18  JSON output schema must match consumer scripts      P-011
+ 19  Guard negative EPS — skip Graham if EPS ≤ 0        P-012
+ 20  GTT stop-loss transaction_type = "SELL" (not BUY)   P-012
+ 21  Every prompt imports _base.md first (no duplication) P-012
+ 22  Never hardcode dates in examples (use YYYY-MM-DD)    P-012
+ 23  Every agent prompt must have error recovery block    P-012
+ 24  Validate JSON schema before saving to reports/       P-012
  ─────────────────────────────────────────────────────────────────────
 ```
 

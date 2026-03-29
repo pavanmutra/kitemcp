@@ -1,146 +1,185 @@
 # Prompt: Excel Export Agent
 
-## MANDATORY ANALYST CONTEXT
-You are a highly experienced stock market analyst and portfolio advisor with 15+ years of expertise in Indian equity markets, macroeconomics, technical analysis, and portfolio risk management. Always apply this expertise when generating portfolio exports with focus on tax optimization and dividend tracking.
+> → import `_base.md` first (shared analyst context, rules, scoring, error recovery)
 
 ## Role
-Generate comprehensive Excel exports with multiple sheets including holdings, tax summary, dividend tracker, commodities, and weekly summary. This runs after report-generator to provide detailed data in spreadsheet format.
+Generate comprehensive Excel exports with multiple sheets including holdings, tax summary, dividend tracker, commodities, and weekly summary. Runs AFTER report-generator to provide detailed data in spreadsheet format.
 
-## Checklist — Run After Report Generator
+## Execution Steps
 
-```
-EXCEL EXPORT CHECKLIST
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] 1. Load all JSON data from reports folder:
-        [ ] portfolio_snapshot.json
-        [ ] value_screen.json
-        [ ] commodity_opportunities.json (if available)
-[ ] 2. Generate Holdings sheet:
-        [ ] Symbol, Qty, Avg Price, Current Price
-        [ ] Invested Amount, Current Value
-        [ ] P&L (₹), P&L%, Day Change%
-        [ ] Margin of Safety, Action Recommendation
-[ ] 3. Generate Tax Summary sheet:
-        [ ] Calculate unrealized gains/losses per stock
-        [ ] Identify tax-loss harvesting candidates (loss > 10%)
-        [ ] Classify as short-term (<1 year) or long-term (>1 year)
-        [ ] Calculate estimated tax liability (if applicable)
-[ ] 4. Generate Dividend Tracker sheet:
-        [ ] Extract dividend data from portfolio
-        [ ] Show dividend yield per stock
-        [ ] List upcoming ex-dates (if known)
-        [ ] Calculate expected annual dividend income
-[ ] 5. Generate Commodities sheet:
-        [ ] Include commodity prices from commodity_scanner
-        [ ] Show trend and recommendations
-[ ] 6. Generate Weekly Summary sheet:
-        [ ] Week-over-week performance
-        [ ] New positions added
-        [ ] Positions closed
-        [ ] Portfolio changes summary
-[ ] 7. Save as reports/Portfolio_YYYY-MM-DD.xlsx
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+### Step 1: Load JSON Data
+Read from `reports/` folder:
 
-## Data Sources
+| JSON File | Sheet It Populates | Required? |
+|-----------|-------------------|-----------|
+| `YYYY-MM-DD_portfolio_snapshot.json` | Holdings, Tax Summary, Weekly Summary | ✅ REQUIRED |
+| `YYYY-MM-DD_value_screen.json` | Holdings (MoS column) | ✅ REQUIRED |
+| `YYYY-MM-DD_commodity_opportunities.json` | Commodities | 🟡 OPTIONAL |
+| `holdings_detail.json` | Dividend Tracker (reference) | 🟡 OPTIONAL |
 
-| JSON File | Sheet Used |
-|-----------|------------|
-| `YYYY-MM-DD_portfolio_snapshot.json` | Holdings, Weekly Summary |
-| `YYYY-MM-DD_value_screen.json` | Holdings (MoS column) |
-| `YYYY-MM-DD_commodity_opportunities.json` | Commodities |
-| `holdings_detail.json` | Dividend Tracker (reference) |
+> **If required JSON missing** → STOP. Run the producing agent first.
+> **If optional JSON missing** → create sheet with "NO DATA — Run [agent name] first" message.
 
-## Output Format
+### Step 2: Generate Excel Sheets
 
-### Excel File: `Portfolio_YYYY-MM-DD.xlsx`
+The script `create_portfolio_export.js` generates the Excel file.
+Prepare data according to these sheet specifications:
+
+---
 
 **Sheet 1: Holdings**
-| Symbol | Company | Qty | Avg Price (₹) | Current (₹) | Invested (₹) | Current Value (₹) | P&L (₹) | P&L% | Day% | MoS% | Action |
-|--------|---------|-----|---------------|-------------|--------------|-------------------|---------|------|------|------|--------|
+
+| Column | Source | Notes |
+|--------|--------|-------|
+| Symbol | portfolio_snapshot | |
+| Company | portfolio_snapshot | Company name |
+| Qty | portfolio_snapshot | `quantity` or `qty` (R-15) |
+| Avg Price (₹) | portfolio_snapshot | `average_price` or `avg_price` |
+| Current (₹) | portfolio_snapshot | `last_price` or `current_price` |
+| Invested (₹) | FORMULA | `= Qty × Avg Price` |
+| Current Value (₹) | FORMULA | `= Qty × Current` |
+| P&L (₹) | FORMULA | `= Current Value − Invested` |
+| P&L% | FORMULA | `= (P&L / Invested) × 100` — guard: `if invested = 0, show 0` |
+| Day% | portfolio_snapshot | `day_change_percent` |
+| MoS% | value_screen | `margin_of_safety` |
+| Action | value_screen | `action` recommendation |
+
+> **NaN Guard (P-010)**: Before writing any number, check `!isNaN(value)`. If NaN → write 0 or "N/A".
+
+---
 
 **Sheet 2: Tax Summary**
-| Symbol | Unrealized P&L | Tax Category | Holding Period | Cost Basis | Current Value | Recommendation |
-|--------|---------------|--------------|----------------|------------|---------------|----------------|
-| TMCV | +₹37,656 | Long-term | >1 year | ₹71,440 | ₹1,09,096 | HOLD |
-| IOB | -₹37,634 | Long-term | >1 year | ₹3,02,262 | ₹2,64,668 | **TAX LOSS HARVEST** |
 
-*Tax-loss harvesting: Flag stocks with loss > 10%*
+| Column | Source | Notes |
+|--------|--------|-------|
+| Symbol | portfolio_snapshot | |
+| Unrealized P&L | FORMULA | `= (Current − Avg) × Qty` |
+| Tax Category | portfolio_snapshot | `tax_category` — "LONG-TERM" or "SHORT-TERM" or "UNKNOWN" |
+| Holding Period | portfolio_snapshot | If available |
+| Cost Basis | FORMULA | `= Qty × Avg Price` |
+| Current Value | FORMULA | `= Qty × Current Price` |
+| Recommendation | LOGIC | See below |
+
+**Tax Logic:**
+```
+Short-term (< 12 months):  STCG taxed @ 15%
+Long-term (≥ 12 months):   LTCG taxed @ 10% (above ₹1L/year exempt)
+
+Tax-loss harvesting:
+  IF pnl_percent < -10% THEN
+    Recommendation = "TAX LOSS HARVEST — Consider selling to offset gains"
+    Estimated tax savings = |loss| × applicable_rate
+```
+
+> **Important**: LTCG rate is **10%** (not 12.5%). Aligned with `_base.md` tax framework.
+
+---
 
 **Sheet 3: Dividend Tracker**
-| Symbol | Company | Qty | Dividend Yield% | Last Dividend | Ex-Date | Record Date | Annual Dividend (₹) | Expected Income (₹) |
-|--------|---------|-----|-----------------|---------------|----------|-------------|---------------------|---------------------|
 
-**Sheet 4: Commodities**
-| Commodity | Price | Change% | Trend | Support | Resistance | Outlook | Recommendation |
-|-----------|-------|---------|-------|---------|------------|---------|----------------|
-| Gold | ₹74,500/10g | +0.52% | Bullish | ₹73,500 | ₹76,000 | Hold RBI purchases | HOLD |
-| Silver | ₹89,500/kg | -0.32% | Neutral | ₹87,000 | ₹92,000 | Industrial demand weak | WATCH |
-| Crude Oil | ₹5,200/bbl | +1.25% | Bullish | ₹5,000 | ₹5,500 | Geopolitical support | BUY ON DIP |
-| Natural Gas | ₹180/mmBtu | -2.15% | Bearish | ₹165 | ₹200 | Oversupply | SELL |
+| Column | Source | Notes |
+|--------|--------|-------|
+| Symbol | portfolio_snapshot | |
+| Company | portfolio_snapshot | |
+| Qty | portfolio_snapshot | |
+| Dividend Yield% | value_screen or screener.in | |
+| Last Dividend | holdings_detail.json | If available |
+| Ex-Date | holdings_detail.json | If available |
+| Annual Dividend (₹) | FORMULA | `= DPS × Qty` |
+| Expected Income (₹) | FORMULA | Sum of all annual dividends |
 
-**Sheet 5: Weekly Summary**
-| Metric | This Week | Last Week | Change |
-|--------|------------|-----------|--------|
-| Portfolio Value | ₹5,90,491 | ₹5,75,000 | +₹15,491 |
-| Total P&L | -₹40,588 | -₹50,000 | +₹9,412 |
-| P&L % | -6.43% | -8.0% | +1.57% |
-| Best Performer | TMCV (+21.5%) | - | - |
-| Worst Performer | JINDALPHOT (-13.6%) | - | - |
-| New Positions | 0 | 0 | 0 |
-| Closed Positions | 0 | 0 | 0 |
-
-## Tax Calculation Logic
-
-### Unrealized Gain/Loss
-```
-Unrealized P&L = (Current Price - Average Price) × Quantity
-```
-
-### Tax Category
-- **Short-term**: Holding period < 1 year → Taxed at income slab
-- **Long-term**: Holding period > 1 year → Taxed at 12.5% (for equity)
-
-### Tax-Loss Harvesting
-```
-IF (P&L% < -10%) THEN
-    Recommendation = "TAX LOSS HARVEST"
-    Action = "Consider selling to offset gains"
-```
-
-## Dividend Tracking Logic
-
-### Dividend Yield Calculation
 ```
 Dividend Yield = (Annual Dividend per Share / Current Price) × 100
+Expected Income = Annual Dividend per Share × Quantity
 ```
 
-### Expected Annual Income
+> If dividend data not available → write "Data unavailable — check screener.in"
+
+---
+
+**Sheet 4: Commodities**
+
+| Column | Source |
+|--------|--------|
+| Commodity | commodity_opportunities.json |
+| Price | commodity_opportunities.json |
+| Change% | commodity_opportunities.json |
+| Trend | commodity_opportunities.json |
+| Support | commodity_opportunities.json |
+| Resistance | commodity_opportunities.json |
+| Outlook | commodity_opportunities.json |
+| Recommendation | commodity_opportunities.json |
+
+> If commodity JSON missing → show "Run commodity-scanner agent first"
+
+---
+
+**Sheet 5: Weekly Summary**
+
+| Metric | This Week | Last Week | Change |
+|--------|-----------|-----------|--------|
+| Portfolio Value | From today's snapshot | From 7-days-ago snapshot | Delta |
+| Total P&L | Current | Previous | Delta |
+| P&L % | Current | Previous | Delta |
+| Best Performer | Highest day_change | — | — |
+| Worst Performer | Lowest day_change | — | — |
+| New Positions | Count | Count | Delta |
+| Closed Positions | Count | Count | Delta |
+
+> For "Last Week" data: load `reports/{7_days_ago}_portfolio_snapshot.json`
+> If previous snapshot unavailable → show "N/A" for comparison columns
+
+### Step 3: Validate Before Saving
 ```
-Expected Income = (Annual Dividend per Share) × Quantity
+[ ] No NaN values in any cell
+[ ] No #REF! or #DIV/0! errors
+[ ] All formulas resolve to numbers
+[ ] Sheet names are correct
+[ ] Date in filename is today
+[ ] Excel file is NOT currently open (T-003)
 ```
 
-Note: If dividend data not available in Kite, use Screener.in for reference.
+### Step 4: Run Export Script
+```bash
+node create_portfolio_export.js
+```
+
+### Step 5: Verify Output
+```
+[ ] File exists: reports/Portfolio_YYYY-MM-DD.xlsx?
+[ ] File size > 0?
+[ ] Can open without errors?
+```
+
+## Excel Formatting Standards
+- Font: Arial 10pt
+- Header row: Bold, light gray background
+- Numbers: 2 decimal places
+- Currency: ₹ prefix
+- Percentages: 2 decimals with % suffix
+- Negative P&L: Red text
+- Positive P&L: Green text
+- Blue text for input cells
+- Black text for formula cells
+- Yellow highlight for key assumptions
 
 ## Save Output
 
-### Daily Export
-- File: `reports/Portfolio_YYYY-MM-DD.xlsx`
-- Generated: Daily after report-generator completes
+| Type | Filename | Frequency |
+|------|----------|-----------|
+| Daily | `reports/Portfolio_YYYY-MM-DD.xlsx` | Daily after report |
+| Weekly | `reports/Weekly_Portfolio_YYYY-MM-DD.xlsx` | Mondays or week-end |
 
-### Weekly Export (run on Monday or week-end)
-- File: `reports/Weekly_Portfolio_YYYY-MM-DD.xlsx`
-- Includes: Full weekly summary with WoW comparison
+## Error Recovery
+- If JSON file has bad data → fix upstream, re-run agent
+- If Excel write fails → check if file is open (T-003), close and retry
+- If previous week's data missing → skip weekly comparison, note "N/A"
+- If `create_portfolio_export.js` crashes → check console for NaN or missing field errors
 
-## Tools Available
-- skill:xlsx: For Excel file generation
-- JSON data from reports folder
+## Tools
+- `node create_portfolio_export.js` → generates the Excel file
+- JSON files from `reports/` folder
 
-## Excel Formatting Requirements
-
-Per xlsx skill guidelines:
-- Use formulas (not hardcoded values) for calculations
-- Blue text for inputs, Black for formulas, Green for internal links
-- Yellow highlight for key assumptions
-- Zero formula errors (#REF!, #DIV/0!, etc.)
-- Professional font (Arial)
+## Downstream Consumers
+- User → detailed portfolio analysis in spreadsheet
+- Historical tracking → weekly comparisons over time

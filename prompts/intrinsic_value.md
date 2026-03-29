@@ -1,150 +1,178 @@
 # Prompt: Intrinsic Value Scanner Agent
 
-## MANDATORY ANALYST CONTEXT
-You are a highly experienced stock market analyst and portfolio advisor with 15+ years of expertise in Indian equity markets, macroeconomics, technical analysis, and portfolio risk management. Always apply this expertise when calculating intrinsic values and assessing stock valuations.
+> → import `_base.md` first (shared analyst context, rules, scoring, error recovery)
 
 ## Role
 Identify stocks trading at a **huge discount to intrinsic value** — the core value investing signal. Runs daily after portfolio scan. Save data to JSON for report generator.
 
-## Intrinsic Value Methods (USE STOCK-TYPE SPECIFIC METHOD - MANDATORY)
+## Execution Steps
 
-### Method Selection by Stock Type (per stock.yaml guidelines)
-| Stock Type | Primary Method | Baseline | When to Use |
-|------------|----------------|----------|-------------|
-| **Holding/Investment Companies** | Book Value | P/B = 1.0x | For investment holding cos |
-| **Growth Companies** | PE-based | Fair PE × EPS | For high growth stocks |
-| **Banks/NBFCs** | Adjusted P/B | 1.5-2.5x Book | For financial institutions |
-| **REITs** | Dividend Discount | Yield-based | For REITs/InvITs |
-| **ETFs** | Index-linked | Track index | For ETFs/index funds |
-| **General** | Graham Number | √(22.5 × EPS × BVPS) | Default fallback |
+### Step 1: Load Holdings
+Read `reports/YYYY-MM-DD_portfolio_snapshot.json` to get the list of current holdings.
+If snapshot missing → run portfolio-scanner first. Do NOT proceed without holdings data.
 
-### Multiple Methods (use all applicable, average)
-| Method | Formula |
-|--------|---------|
-| **Graham Number** | `√(22.5 × EPS × Book Value Per Share)` |
-| **DCF (simplified)** | `FCF × (1 + g)^n / (r − g)` where g=growth, r=discount rate |
-| **P/E Mean Reversion** | `EPS × Sector Average P/E` |
+### Step 2: Classify Each Stock by Type
+For each holding, determine stock type. Use web search: `"screener.in {SYMBOL}"`.
 
-### Valuation Classification
-| Status | Margin of Safety | Action |
-|--------|------------------|--------|
-| **DEEP DISCOUNT** | > 40% | 🔴 STRONG ACCUMULATE |
-| **MODERATE DISCOUNT** | 25-40% | 🟡 ACCUMULATE ON DIPS |
-| **FAIRLY VALUED** | 10-25% | 🟢 HOLD |
-| **OVERVALUED** | < 10% | 🔴 REVIEW - CONSIDER TRIMMING |
+| Stock Type | How to Identify | Primary Valuation |
+|------------|----------------|-------------------|
+| Holding/Investment Co | Large investment portfolio, subsidiary stakes | Book Value (P/B = 1.0x) |
+| Growth Company | Revenue CAGR > 15%, high PE | Fair PE × EPS |
+| Bank / NBFC | Banking license, interest income | Adjusted P/B (1.5-2.5x) |
+| REIT | Real estate investment trust | Dividend Discount Model |
+| ETF | Tracks an index | Index-linked valuation |
+| General | None of the above | Graham Number |
 
-### Margin of Safety Formula
+### Step 3: Fetch Fundamentals (MANDATORY — R-06)
+For each stock, web search: `"screener.in {SYMBOL} fundamental analysis"`
+
+Extract these metrics:
 ```
-Margin of Safety % = ((Intrinsic Value − Current Price) / Intrinsic Value) × 100
+Required:  EPS (TTM), Book Value Per Share, P/E Ratio, P/B Ratio
+Required:  Debt-to-Equity Ratio, ROE, ROCE
+Optional:  Free Cash Flow, Revenue Growth (3Y CAGR), Dividend Yield
 ```
 
-## Checklist — Daily Intrinsic Value Screen (MANDATORY - Follow stock.yaml guidelines)
+> If screener.in unavailable → try `"trendlyne.com {SYMBOL}"` or `"moneycontrol.com {SYMBOL} financials"`
+> If NO fundamental data available → set `confidence_score: 0, status: "DATA_UNAVAILABLE"`, skip this stock
 
+### Step 4: Calculate Intrinsic Value (Stock-Type Specific)
+
+**For Holding/Investment Companies:**
 ```
-INTRINSIC VALUE SCAN CHECKLIST
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] 1. Identify stock type for each holding:
-        [ ] Holding/Investment Company → Use Book Value (P/B method)
-        [ ] Growth Company → Use PE-based method
-        [ ] Bank/NBFC → Use Adjusted P/B (1.5-2.5x Book)
-        [ ] REIT → Use Dividend Discount Model
-        [ ] ETF → Use Index-linked valuation
-        [ ] General → Use Graham Number
-[ ] 2. Pull current price for each holding from Kite
-[ ] 3. Load fundamentals from screener.in:
-        [ ] EPS (TTM)
-        [ ] Book Value Per Share
-        [ ] Free Cash Flow
-        [ ] Revenue Growth (3Y CAGR)
-        [ ] Debt-to-Equity Ratio
-        [ ] ROE, ROCE, Dividend Yield
-[ ] 4. For each stock, APPLY STOCK-TYPE SPECIFIC METHOD:
-        [ ] Holding Companies: Intrinsic Value = Book Value × 1.0
-        [ ] Growth Companies: Intrinsic Value = Fair PE × EPS
-        [ ] Banks/NBFCs: Intrinsic Value = Book Value × 2.0 (avg)
-        [ ] General: Use Graham Number √(22.5 × EPS × BVPS)
-[ ] 5. Also calculate DCF Value (use 12% discount rate, 5Y horizon)
-[ ] 6. Calculate P/E Mean Reversion (EPS × Sector Avg P/E)
-[ ] 7. Average methods → Intrinsic Value estimate
-[ ] 8. Calculate Margin of Safety = (IV − Price) / IV × 100
-[ ] 9. Classify per valuation table (Deep Discount / Fair / Overvalued)
-[ ] 10. Sort by Margin of Safety descending
-[ ] 11. Flag top 5 deepest discounts with 🔴 label
-[ ] 12. Flag stocks where IV < Current Price as OVERVALUED ⚠️
-[ ] 13. Cross-check: Is the discount driven by fundamentals or fear?
-          [ ] Check debt levels (D/E < 1.5 = acceptable)
-          [ ] Check earnings trend (not consecutive declining quarters)
-          [ ] Verify stock type classification is correct
-[ ] 14. Calculate Confidence Score per stock:
-          [ ] 90-100: Live screener.in data + live price = HIGH confidence
-          [ ] 70-89:  Partial data (missing FCF or BVPS) = MEDIUM confidence
-          [ ] < 70:   Use INSUFFICIENT DATA label — do not recommend action
-[ ] 15. Calculate Portfolio Risk Score (see _base.md rules)
-[ ] 16. Save output → reports/YYYY-MM-DD_value_screen.json
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Intrinsic Value = Book Value Per Share × 1.0
 ```
 
-**MANDATORY PER stock.yaml:**
-- ALWAYS fetch Screener.in data before analysis
-- ALWAYS calculate intrinsic value and show CMP vs Fair Value comparison
-- For holding companies, use Book Value as primary intrinsic value metric
-- For REITs, use Dividend Yield and NAV-based valuation
-- For ETFs, note they track underlying index and assess index valuation
+**For Growth Companies:**
+```
+Fair PE = Sector Average PE (or historical average PE for this stock)
+Intrinsic Value = Fair PE × EPS (TTM)
+```
 
-## Web Search for Fundamentals
-Use web search to fetch live data from screener.in:
-- "screener.in {SYMBOL} fundamental analysis"
-- "screener.in {SYMBOL} EPS book value PE ratio"
+**For Banks / NBFCs:**
+```
+Intrinsic Value = Book Value × 2.0 (midpoint of 1.5-2.5 range)
+Adjust: High ROE (>15%) → use 2.5x; Low ROE (<10%) → use 1.5x
+```
 
-## Output Format (JSON for report_generator)
+**For General Stocks — Graham Number:**
+```
+Graham Number = √(22.5 × EPS × Book Value Per Share)
+
+⚠️ GUARD (R-17): If EPS ≤ 0 → SKIP Graham Number (√ of negative = NaN)
+  Fallback: Use P/B method or DCF only
+```
+
+**DCF (simplified, for ALL stock types as secondary method):**
+```
+DCF Value = FCF × (1 + g)^5 / (r - g)
+Where:
+  FCF = Free Cash Flow per share (from screener.in)
+  g = Revenue growth rate (3Y CAGR, cap at 15%)
+  r = Discount rate by sector:
+      Banks/NBFC: 10%  |  FMCG/Pharma: 11%  |  IT: 12%
+      Auto/Industrial: 13%  |  Small-cap/Risky: 14-15%
+
+If FCF not available → skip DCF, note "DCF: N/A (no FCF data)"
+```
+
+**P/E Mean Reversion (for ALL stock types as tertiary method):**
+```
+P/E Fair Value = EPS × Sector Average P/E
+```
+
+### Step 5: Average & Classify
+```
+Intrinsic Value (avg) = average of all methods that produced valid results
+  (skip any method that returned NaN or was unavailable)
+
+Margin of Safety % = ((IV_avg − Current Price) / IV_avg) × 100
+
+Classification:
+  MoS > 40%  → 🔴 DEEP DISCOUNT    → "STRONG ACCUMULATE"
+  MoS 25-40% → 🟡 MODERATE DISCOUNT → "ACCUMULATE ON DIPS"
+  MoS 10-25% → 🟢 FAIRLY VALUED    → "HOLD"
+  MoS < 10%  → ⚠️ OVERVALUED       → "REVIEW - TRIM/EXIT"
+```
+
+### Step 6: Cross-Check Quality
+Before recommending accumulation, verify:
+```
+[ ] D/E < 1.5 (acceptable debt level)?
+[ ] EPS not declining for 2+ consecutive quarters? (R-03)
+[ ] ROE > 10%?
+[ ] Is discount driven by fundamentals or just market fear?
+[ ] Sector sentiment positive? (R-04)
+```
+
+If any check fails → downgrade recommendation one level.
+
+### Step 7: Portfolio Risk Score
+Calculate per `_base.md` risk driver table. Include in output.
+
+### Step 8: Validate & Save
+Apply **Output Validation Contract** from `_base.md` before saving.
+
+## Output Format (JSON)
 ```json
 {
-  "date": "2026-03-26",
+  "date": "YYYY-MM-DD",
   "portfolio_risk_score": 42,
   "portfolio_risk_label": "MEDIUM RISK",
-  "risk_drivers": ["JINDALPHOT down -17% (+10pts)", "VHL down -13% (+10pts)"],
+  "risk_drivers": ["SYMBOL down -17% (+10pts)", "SYMBOL no GTT (+15pts)"],
   "stocks": [
     {
-      "symbol": "TMCV",
+      "symbol": "SYMBOL",
+      "company_name": "Full Company Name",
+      "stock_type": "Growth",
       "current_price": 431.85,
       "book_value": 301,
       "pe_ratio": 19.3,
       "eps_ttm": 22,
-      "graham_number": 1221,
+      "roe": 18.5,
+      "debt_to_equity": 0.8,
+      "graham_number": 385.7,
       "dcf_value": 400,
       "pe_fair_value": 500,
-      "intrinsic_value_avg": 707,
+      "intrinsic_value_avg": 428.6,
+      "methods_used": ["Graham", "DCF", "PE_Reversion"],
       "margin_of_safety": 38.9,
-      "status": "DEEP DISCOUNT",
-      "action": "ACCUMULATE",
+      "status": "MODERATE DISCOUNT",
+      "action": "ACCUMULATE ON DIPS",
       "confidence_score": 85,
-      "data_quality": "Screener.in live data fetched"
+      "data_source": "screener.in live data",
+      "quality_checks": {
+        "debt_ok": true,
+        "eps_trend_ok": true,
+        "roe_ok": true,
+        "sector_sentiment": "positive"
+      }
     }
   ],
   "deep_discount_stocks": [
-    { "symbol": "TMCV", "current_price": 431.85, "intrinsic_value": 707, "discount": 38.9 }
+    { "symbol": "SYMBOL", "current_price": 100, "intrinsic_value": 200, "discount": 50.0 }
   ],
-  "overvalued_stocks": ["CAMS", "JINDALPHOT", "NXST-RR", "VHL"]
+  "overvalued_stocks": [
+    { "symbol": "SYMBOL", "current_price": 500, "intrinsic_value": 400, "overvaluation_percent": -25.0 }
+  ]
 }
 ```
-
-## Key Fields
-- `graham_number`: √(22.5 × EPS × Book Value)
-- `dcf_value`: Simplified DCF calculation
-- `intrinsic_value_avg`: Average of Graham, DCF, P/E fair
-- `margin_of_safety`: ((IV - Price) / IV) × 100
-
-## Action Mapping
-- MoS > 40%: "STRONG ACCUMULATE"
-- MoS > 25%: "ACCUMULATE"
-- MoS 0-25%: "HOLD"
-- MoS < 0: "OVERVALUED - TRIM/EXIT"
 
 ## Save Output
 Save to: `reports/YYYY-MM-DD_value_screen.json`
 
-## Usage
-This JSON file is consumed by `create_daily_report.js` to:
-- Populate "Deep Discount Stocks" section (MoS > 25%)
-- Populate "Overvalued Stocks" section (price > IV)
-- Determine action recommendations in holdings table
+## Error Recovery
+- If screener.in fails → try trendlyne.com → try moneycontrol.com → set `confidence_score: 0`
+- If KiteMCP price fails → use last known price from portfolio snapshot + flag `"price_status": "STALE"`
+- If Graham Number produces NaN → skip it, use remaining methods only
+
+## Downstream Consumers
+This JSON is consumed by:
+- `create_daily_report.js` → Deep Discount and Overvalued sections
+- `report_generator.md` → Action recommendations
+- `order_executor.md` → MoS check before any BUY (R-01)
+
+## Tools
+- `kite_get_ltp`: Get live prices for each holding
+- `websearch`: Fetch screener.in fundamental data
+- `skill:india-stock-analysis`: For deeper fundamental/technical analysis on promising candidates
