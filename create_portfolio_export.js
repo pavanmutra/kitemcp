@@ -56,21 +56,31 @@ function getTaxCategory(h) {
 
 const rawHoldings = portfolioData?.holdings || config.export.defaultHoldings;
 
-const holdings = rawHoldings.map(h => ({
-    symbol:        h.symbol,
-    quantity:      h.quantity,
-    avg_price:     h.average_price || h.avg_price,
-    current_price: h.last_price   || h.current_price,
-    invested:      h.quantity * (h.average_price || h.avg_price),
-    current_value: h.quantity * (h.last_price    || h.current_price),
-    pnl:           h.pnl,
-    pnl_percent:   h.pnl_percent  || ((h.pnl / (h.quantity * (h.average_price || h.avg_price))) * 100),
-    dividend_yield:h.dividend_yield || 0,
-    tax_category:  getTaxCategory(h),
-    holding_period_days: h.holding_period_days || 0,
-    margin_of_safety: ivMap[h.symbol]?.margin_of_safety ?? null,
-    intrinsic_value:  ivMap[h.symbol]?.graham_number ?? null,
-}));
+const holdings = rawHoldings.map(h => {
+    const qty      = h.quantity     || h.qty;
+    const avgPrice = h.average_price || h.avg_price;
+    const curPrice = h.current_price  || h.last_price;
+    const invested = qty * avgPrice;
+    const curValue = qty * curPrice;
+    const pnlVal   = h.pnl != null ? h.pnl : (curValue - invested);
+    const pnlPct   = h.pnl_percent || h.pnl_pct
+        || (invested > 0 ? ((pnlVal / invested) * 100) : 0);
+    return {
+        symbol:        h.symbol,
+        quantity:      qty,
+        avg_price:     avgPrice,
+        current_price: curPrice,
+        invested,
+        current_value: curValue,
+        pnl:           pnlVal,
+        pnl_percent:   pnlPct,
+        dividend_yield:h.dividend_yield || 0,
+        tax_category:  getTaxCategory(h),
+        holding_period_days: h.holding_period_days || 0,
+        margin_of_safety: ivMap[h.symbol]?.margin_of_safety ?? null,
+        intrinsic_value:  ivMap[h.symbol]?.graham_number ?? null,
+    };
+});
 
 const rawCommodities = commodityData?.commodities || config.export.commodityDefaults;
 const commodities = Array.isArray(rawCommodities)
@@ -107,21 +117,23 @@ holdingsSheet.getRow(1).alignment = { horizontal: 'center' };
 
 holdings.forEach(h => {
     const action = getExportAction(h.symbol, h.pnl_percent);
-    const ivValue = h.intrinsic_value != null ? Math.round(h.intrinsic_value) : null;
-    const mosValue = h.margin_of_safety != null ? parseFloat(h.margin_of_safety.toFixed(1)) : null;
+    const ivValue = h.intrinsic_value != null && !isNaN(h.intrinsic_value) ? Math.round(h.intrinsic_value) : null;
+    const mosValue = h.margin_of_safety != null && !isNaN(h.margin_of_safety) ? parseFloat(h.margin_of_safety.toFixed(1)) : null;
+    const pnlPct = (h.pnl_percent != null && !isNaN(h.pnl_percent)) ? parseFloat(h.pnl_percent.toFixed(1)) : null;
+    const divYield = (h.dividend_yield != null && !isNaN(h.dividend_yield)) ? parseFloat(h.dividend_yield.toFixed(1)) : null;
     
     const row = holdingsSheet.addRow({
         symbol:           h.symbol,
         quantity:         h.quantity,
-        avg_price:        parseFloat(h.avg_price.toFixed(2)),
-        current_price:    parseFloat(h.current_price.toFixed(2)),
-        invested:         Math.round(h.invested),
-        current_value:    Math.round(h.current_value),
-        pnl:              Math.round(h.pnl),
-        pnl_percent:      parseFloat(h.pnl_percent.toFixed(1)),
+        avg_price:        h.avg_price != null ? parseFloat(h.avg_price.toFixed(2)) : null,
+        current_price:    h.current_price != null ? parseFloat(h.current_price.toFixed(2)) : null,
+        invested:         h.invested != null ? Math.round(h.invested) : null,
+        current_value:    h.current_value != null ? Math.round(h.current_value) : null,
+        pnl:              h.pnl != null ? Math.round(h.pnl) : null,
+        pnl_percent:      pnlPct,
         intrinsic_value:  ivValue !== null ? ivValue : 'N/A',
         margin_of_safety: mosValue !== null ? mosValue : 'N/A',
-        dividend_yield:   parseFloat(h.dividend_yield.toFixed(1)),
+        dividend_yield:   divYield !== null ? divYield : 'N/A',
         tax_category:     h.tax_category,
         action:           action
     });

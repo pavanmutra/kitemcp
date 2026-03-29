@@ -463,6 +463,61 @@ ROOT CAUSE:
 
 ---
 
+### ❌ MISTAKE P-010 — Excel/Word Reports Showing NaN for P&L %
+```
+DATE     : 2026-03-29
+WHAT HAPPENED:
+  Portfolio export showed P&L % as NaN for all holdings.
+  Daily report also showed NaN P&L % in the portfolio table.
+  Root cause: JSON used qty/avg_price/last_price but script expected
+  quantity/average_price/current_price.
+
+LOSS / IMPACT : Reports were unusable. User lost confidence in data.
+
+ROOT CAUSE:
+  KiteMCP returns fields as qty, average_price, last_price.
+  create_portfolio_export.js expected quantity, avg_price, current_price.
+  create_daily_report.js used qty, avg, last (which matched but pnl computation failed).
+  No standardized field names across scripts.
+
+⛔ NEVER DO:
+  Hardcode field names assuming a specific JSON schema.
+  Generate reports without verifying field names match between JSON and script.
+
+✅ FIX / RULE ADDED:
+  create_portfolio_export.js now has flexible field mapping:
+    const qty      = h.quantity     || h.qty;
+    const avgPrice = h.average_price || h.avg_price;
+    const curPrice = h.current_price  || h.last_price;
+  All NaN checks also added: !isNaN() guards before toFixed().
+  STACK all scripts on same field name convention from portfolio_snapshot.json.
+```
+
+---
+
+### ❌ MISTAKE P-011 — Report Generator Missing Immediate Actions
+```
+DATE     : 2026-03-29
+WHAT HAPPENED:
+  Daily report showed "Immediate Actions: 0" even though ASHOKA
+  had no GTT stop-loss (high priority).
+  gtt_audit.json had action_items but no unprotected_holdings array.
+
+ROOT CAUSE:
+  create_daily_report.js reads gtt_audit.json and checks
+  gttData.unprotected_holdings, but this field was never added to the JSON.
+
+⛔ NEVER DO:
+  Output JSON files that don't match the expected schema of downstream consumers.
+
+✅ FIX / RULE ADDED:
+  All agent JSON outputs must match the schema expected by report-generator.
+  gtt_audit.json now has: protected_holdings[] and unprotected_holdings[].
+  Report generator validates: if JSON field missing, log warning.
+```
+
+---
+
 ## 📋 MASTER RULES DERIVED FROM ALL MISTAKES
 
 These rules are auto-checked by agents. Any violation = hard stop.
@@ -484,8 +539,10 @@ These rules are auto-checked by agents. Any violation = hard stop.
 12  All report filenames must include YYYY-MM-DD        T-002     
 13  Close Excel before running report-generator        T-003     
 14  MCP tools may be unavailable — fallback ready     T-004/T-005
-15  Verify GTT trigger direction matches price flow    P-008
-16  ALWAYS verify stock name before analysis           P-009
+ 15  Verify GTT trigger direction matches price flow    P-008
+ 16  ALWAYS verify stock name before analysis           P-009
+ 17  Use flexible field mapping for JSON schema changes  P-010
+ 18  JSON output schema must match consumer scripts      P-011
  ─────────────────────────────────────────────────────────────────────
 ```
 
