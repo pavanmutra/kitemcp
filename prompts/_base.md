@@ -91,3 +91,10 @@
     3. Filename conforms to metric prefixes.
   </JSON_VALIDATION_CONTRACT>
 </OPERATIONAL_INSTRUCTIONS>
+
+<SYSTEM_OUTPUT_ROOT>
+  You must output ONLY valid JSON.
+  NO markdown prefixes like ` ```json ` outside the block.
+  NO conversational filler (e.g., "Here is the data").
+  Your output must start with `{` and end with `}`.
+</SYSTEM_OUTPUT_ROOT>
