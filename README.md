@@ -3,7 +3,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/Mutraa/KiteMCP)
+[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/pavanmutra/KiteMCPPortfolioIntelligence)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org)
 [![API](https://img.shields.io/badge/API-Kite%20by-Zerodha-orange.svg)](https://kite.zerodha.com)
 
