@@ -106,6 +106,17 @@
         return `${sign}${value.toFixed(2)}%`;
     }
 
+    function formatMos(value) {
+        if (value == null || isNaN(value)) return '--';
+        const sign = value >= 0 ? '+' : '';
+        return `${sign}${value.toFixed(1)}%`;
+    }
+
+    function getMosValue(holding) {
+        // Handle multiple field names: mos_pct, margin_of_safety_pct, margin_of_safety
+        return holding.mos_pct ?? holding.margin_of_safety_pct ?? holding.margin_of_safety?.mos_pct ?? 0;
+    }
+
     function escapeHtml(text) {
         if (text == null) return '';
         const div = document.createElement('div');
@@ -221,7 +232,7 @@
     function renderHoldingsTable(data) {
         const portfolio = data?.portfolio;
         if (!portfolio?.holdings?.length) {
-            elements.holdingsBody.innerHTML = '<tr><td colspan="9" class="empty-state">No holdings data available</td></tr>';
+            elements.holdingsBody.innerHTML = '<tr><td colspan="10" class="empty-state">No holdings data available</td></tr>';
             return;
         }
         
@@ -240,8 +251,11 @@
         const sortBy = elements.holdingsSort.value;
         holdings.sort((a, b) => {
             switch (sortBy) {
-                case 'value':
-                    return (b.current_value || 0) - (a.current_value || 0);
+                case 'value': {
+                    const valA = ((a.quantity||a.qty||a.t1_quantity||0) * (a.current_price||a.last_price||0));
+                    const valB = ((b.quantity||b.qty||b.t1_quantity||0) * (b.current_price||b.last_price||0));
+                    return valB - valA;
+                }
                 case 'pnl':
                     return (b.pnl || 0) - (a.pnl || 0);
                 case 'symbol':
@@ -255,20 +269,29 @@
         const rows = holdings.map(h => {
             const pnl = h.pnl || 0;
             const pnlPct = h.pnl_pct || 0;
+            const qty = h.quantity || h.qty || h.t1_quantity || 0;
+            const price = h.current_price || h.last_price || 0;
+            const currentValue = (qty || 0) * (price || 0);
             const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
             const statusClass = pnlPct > 20 ? 'profit' : (pnlPct < -15 ? 'loss' : 'hold');
             const statusLabel = pnlPct > 20 ? 'PROFIT' : (pnlPct < -15 ? 'CRITICAL' : 'HOLD');
+            const mosValue = (h.mos_pct !== undefined && h.mos_pct !== null) ? h.mos_pct : '--';
+            const mosDisplay = (typeof mosValue === 'number') ? ((mosValue >= 0 ? '+' : '') + mosValue.toFixed(1) + '%') : '--';
+            const ivValue = (h.intrinsic_value_avg !== undefined && h.intrinsic_value_avg !== null && h.intrinsic_value_avg > 0) ? h.intrinsic_value_avg : null;
+            const ivDisplay = ivValue ? '₹' + ivValue.toFixed(0) : '--';
             
             return `
                 <tr>
                     <td class="symbol-cell">${escapeHtml(h.symbol)}</td>
                     <td>${escapeHtml(h.company_name || h.exchange)}</td>
-                    <td class="text-right">${h.quantity || h.qty || 0}</td>
+                    <td class="text-right">${qty > 0 ? qty : (h.t1_quantity ? h.t1_quantity + ' (T+1)' : 0)}</td>
                     <td class="text-right price-cell">₹${(h.average_price || h.avg_price || 0).toFixed(2)}</td>
-                    <td class="text-right price-cell">₹${(h.last_price || h.current_price || 0).toFixed(2)}</td>
-                    <td class="text-right price-cell">${formatCurrency(h.current_value)}</td>
-                    <td class="text-right ${pnlClass}">${formatCurrency(pnl)}</td>
+                    <td class="text-right price-cell">₹${price.toFixed(2)}</td>
+                    <td class="text-right price-cell">${ivDisplay}</td>
+                    <td class="text-right price-cell">${currentValue > 0 ? formatCurrency(currentValue) : '--'}</td>
+                    <td class="text-right ${pnlClass}">${pnl !== 0 ? formatCurrency(pnl) : '--'}</td>
                     <td class="text-right ${pnlClass}">${formatPercent(pnlPct)}</td>
+                    <td class="text-right">${mosDisplay}</td>
                     <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                 </tr>
             `;
@@ -287,7 +310,7 @@
         let discounts = [];
         if (valuescreen?.holdings_analysis) {
             discounts = valuescreen.holdings_analysis.filter(h => {
-                const mos = h.margin_of_safety?.mos_pct || 0;
+                const mos = h.margin_of_safety?.mos_pct ?? h.mos_pct ?? h.margin_of_safety_pct ?? 0;
                 return mos > 25;
             });
         }
@@ -295,6 +318,14 @@
         // Fallback to deep_discount_stocks
         if (!discounts.length && valuescreen?.deep_discount_stocks) {
             discounts = Array.isArray(valuescreen.deep_discount_stocks) ? valuescreen.deep_discount_stocks : [];
+        }
+        
+        // Also check stocks array
+        if (!discounts.length && valuescreen?.stocks) {
+            discounts = valuescreen.stocks.filter(s => {
+                const mos = s.margin_of_safety_pct ?? s.margin_of_safety?.mos_pct ?? s.mos_pct ?? 0;
+                return mos > 25;
+            });
         }
         
         elements.discountCount.textContent = discounts.length;
@@ -305,9 +336,9 @@
         }
         
         const cards = discounts.map(s => {
-            const mos = s.margin_of_safety?.mos_pct || s.mos_pct || 0;
+            const mos = s.margin_of_safety_pct ?? s.margin_of_safety?.mos_pct ?? s.mos_pct ?? 0;
             const price = s.current_price || s.last_price || 0;
-            const iv = s.valuation?.intrinsic_value_avg || s.valuation?.graham_number || s.intrinsic_value || 0;
+            const iv = s.valuation?.intrinsic_value_avg ?? s.intrinsic_value_avg ?? s.valuation?.graham_number ?? s.intrinsic_value ?? 0;
             const action = s.action_signal || s.action || 'ACCUMULATE';
             
             return `
@@ -340,8 +371,17 @@
     function renderGTTStatus(data) {
         const gtt = data?.gtt;
         
-        const unprotectedList = gtt?.unprotected_holdings || [];
-        const protectedList = gtt?.protected_holdings || [];
+        // Handle both array of objects and array of strings
+        let unprotectedList = gtt?.unprotected_holdings || [];
+        let protectedList = gtt?.protected_holdings || [];
+        
+        // Normalize to array of symbols
+        if (protectedList.length > 0 && typeof protectedList[0] === 'object') {
+            protectedList = protectedList.map(h => h.symbol);
+        }
+        if (unprotectedList.length > 0 && typeof unprotectedList[0] === 'object') {
+            unprotectedList = unprotectedList.map(h => h.symbol);
+        }
         
         // Also get holdings needing GTT from the recommendations
         const holdingsNeedingGtt = gtt?.holdings_needing_gtt || [];
@@ -738,9 +778,18 @@
         });
         
         // Refresh button
-        elements.refreshBtn.addEventListener('click', () => {
+        elements.refreshBtn.addEventListener('click', async () => {
             showLoading();
-            loadDashboard(state.currentDate);
+            
+            // Try quick refresh first
+            try {
+                await fetch('/api/quick-refresh', { method: 'POST' });
+            } catch (e) {
+                console.warn('Quick refresh failed:', e.message);
+            }
+            
+            await loadDashboard(state.currentDate);
+            await checkDataFreshness();
         });
         
         // Tab navigation
@@ -836,11 +885,165 @@
         // Load initial data
         await loadDashboard(state.currentDate);
         
+        // Check data freshness and show warnings
+        await checkDataFreshness();
+        
         // Start auto-refresh
         startAutoRefresh();
         
+        // Initialize live refresh features
+        initLiveRefresh();
+        
         console.log('KiteMCP Dashboard initialized');
     }
+
+    // ============================================
+    // Data Freshness Check
+    // ============================================
+    async function checkDataFreshness() {
+        try {
+            const response = await fetch('/api/data-status');
+            if (!response.ok) return;
+            
+            const status = await response.json();
+            
+            // Show stale warning if needed
+            if (status.isStale || !status.isToday) {
+                showStaleDataWarning(status);
+            }
+            
+            // Update last refresh indicator
+            updateLastRefreshIndicator(status);
+            
+            // Show recommendation if market is open and data is stale
+            if (status.isMarketOpen && status.isStale) {
+                showRefreshRecommendation(status);
+            }
+            
+        } catch (e) {
+            console.warn('Could not check data freshness:', e.message);
+        }
+    }
+
+    function showStaleDataWarning(status) {
+        const banner = document.getElementById('staleWarning');
+        if (!banner) return;
+        
+        banner.style.display = 'flex';
+        
+        const messageEl = banner.querySelector('.stale-message');
+        const actionEl = banner.querySelector('.stale-action');
+        
+        if (messageEl) {
+            if (!status.isToday) {
+                messageEl.textContent = `⚠️ Showing ${status.dataDate} data. Today is ${status.currentDate}.`;
+            } else if (status.freshness === 'stale') {
+                messageEl.textContent = `⚠️ Data is outdated. Last refresh: ${status.lastRefreshed || 'unknown'}`;
+            }
+        }
+        
+        if (actionEl) {
+            actionEl.textContent = 'Click "🔄 Refresh with AI" for live prices →';
+        }
+    }
+
+    function updateLastRefreshIndicator(status) {
+        const indicator = document.getElementById('liveIndicator');
+        if (!indicator) return;
+        
+        if (status.lastRefreshed) {
+            const time = new Date(status.lastRefreshed).toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            indicator.textContent = `Live: ${time}`;
+            indicator.style.color = status.freshness === 'current' ? '#22c55e' : '#f59e0b';
+        } else if (!status.isToday) {
+            indicator.textContent = 'Historical';
+            indicator.style.color = '#6b7280';
+        }
+    }
+
+    function showRefreshRecommendation(status) {
+        // Could show a toast notification here
+        console.log('💡 Market is open. Consider refreshing for live prices.');
+    }
+
+    function initLiveRefresh() {
+        // Mark as refreshed after successful load
+        localStorage.setItem('kitemcp_last_refresh', new Date().toISOString());
+        
+        // Attach AI refresh button handler
+        const refreshAIBtn = document.getElementById('refreshAIBtn');
+        if (refreshAIBtn) {
+            refreshAIBtn.addEventListener('click', showAIRefreshModal);
+        }
+    }
+
+    function showAIRefreshModal() {
+        // Create or show modal
+        let modal = document.getElementById('refreshModal');
+        
+        if (!modal) {
+            modal = createRefreshModal();
+        }
+        
+        modal.style.display = 'flex';
+    }
+
+    function createRefreshModal() {
+        const modal = document.createElement('div');
+        modal.id = 'refreshModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🔄 Refresh Live Prices</h3>
+                    <button class="modal-close" onclick="document.getElementById('refreshModal').style.display='none'">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>To get <strong>live prices</strong>, run this command in terminal:</p>
+                    <div class="prompt-box">
+                        <code>npm run refresh</code>
+                        <button class="copy-btn" onclick="navigator.clipboard.writeText('npm run refresh')">📋 Copy</button>
+                    </div>
+                    <p style="margin-top: 16px;"><strong>Or follow these steps:</strong></p>
+                    <ol style="text-align: left; margin-left: 20px;">
+                        <li>Open a new terminal in this project folder</li>
+                        <li>Run: <code>npm run refresh</code></li>
+                        <li>Copy the AI prompt shown</li>
+                        <li>Paste it into OpenCode/Antigravity</li>
+                        <li>Let AI fetch live prices</li>
+                        <li>Return here and click <strong>Refresh Dashboard</strong></li>
+                    </ol>
+                    <p style="margin-top: 16px; color: #6b7280;">
+                        <em>Note: Live prices require AI agent because KiteMCP uses OAuth sessions that can't be called directly from the browser.</em>
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="document.getElementById('refreshModal').style.display='none'">Cancel</button>
+                    <button class="btn btn-primary" onclick="window.refreshDashboardFromModal()">🔄 Refresh Dashboard</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Expose refresh function globally
+        window.refreshDashboardFromModal = function() {
+            modal.style.display = 'none';
+            location.reload();
+        };
+        
+        return modal;
+    }
+
+    // Expose for live-refresh.js integration
+    window.refreshDashboardData = async function() {
+        await loadDashboard(state.currentDate);
+        await checkDataFreshness();
+    };
 
     // Start the application
     if (document.readyState === 'loading') {

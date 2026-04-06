@@ -1,0 +1,45 @@
+Fetch live portfolio prices and update today's JSON files for the KiteMCP portfolio dashboard.
+
+IMPORTANT RULES:
+- Read learnings.md FIRST for NEVER DO patterns
+- Read create_master_markdown.js to understand JSON schema requirements
+- All JSON must match the schema expected by consumer scripts
+
+INSTRUCTIONS:
+1. Use kite_get_ltp() to get current prices for ALL holdings. Build instrument list from today's portfolio snapshot JSON.
+
+2. Read today's portfolio snapshot from: reports/YYYY-MM-DD/raw_data/YYYY-MM-DD_portfolio_snapshot.json
+
+3. Update these fields for each holding:
+   - current_price: use last_price from kite_get_ltp
+   - last_price: use last_price from kite_get_ltp
+   - Recalculate pnl: (current_price - average_price) * quantity
+   - Recalculate pnl_pct: ((current_price - average_price) / average_price) * 100
+
+4. Recalculate portfolio totals:
+   - total_value: sum of (quantity * current_price) for all holdings
+   - total_pnl: sum of all individual pnl values
+   - total_pnl_pct: (total_pnl / (total_value - total_pnl)) * 100
+
+5. Update execution_time to current timestamp
+
+6. Save the updated JSON to: reports/YYYY-MM-DD/raw_data/YYYY-MM-DD_portfolio_snapshot.json
+
+7. Also update reports/YYYY-MM-DD/raw_data/YYYY-MM-DD_gtt_audit.json:
+   - Run kite_get_gtts() to get current GTT count
+   - Update total_gtts_active and total_protected_holdings
+
+8. VERIFY JSON SCHEMA before saving:
+   - holdings: array with {symbol, qty, avg_price, current_price, last_price, pnl, pnl_pct, ...}
+   - Do NOT use nested objects where arrays are expected
+   - Do NOT use wrong field names (e.g., "last_price" not "price" when script expects "current_price")
+
+9. Return summary of what was updated:
+   - Number of holdings refreshed
+   - Total portfolio value
+   - Total P&L
+   - Any errors or warnings
+
+10. Document any issues in learnings.md if new patterns discovered.
+
+START EXECUTION:

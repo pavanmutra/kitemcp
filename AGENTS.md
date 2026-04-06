@@ -18,6 +18,19 @@ npm run check      # → Gate status (PASS = safe to trade | FAIL = do NOT trade
 
 # Or use the master orchestrator:
 npm start          # Prints AI prompt + waits for JSON + auto-runs report+export
+
+# Step 4: Refresh live prices (before opening dashboard):
+npm run refresh    # → Shows AI agent prompt for live prices
+# Paste the prompt into OpenCode, let AI fetch live prices
+
+# Step 5: Start web server and open in browser:
+npm run web        # → Starts server + auto-opens http://localhost:3000
+# OR manually:
+npm run dev        # → Same as npm run web (alias)
+
+# Dashboard shows "Live: HH:MM" indicator when prices are current
+# Dashboard shows "⚠️" warning when data is stale (historical date or >5 min old)
+# Click "🔄 Refresh with AI" button for live price refresh anytime
 ```
 
 > [!IMPORTANT]

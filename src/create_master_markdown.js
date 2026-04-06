@@ -130,7 +130,7 @@ if (valueData && valueData.stocks) {
 if (gttData) {
     md += `## 🛡️ GTT Safety Audit\n\n`;
     md += `- **Total GTTs Active**: ${gttData.total_gtts_active || 0}\n`;
-    md += `- **Protected Holdings**: ${gttData.protected_holdings || 0} / ${portfolioData?.holdings?.length || 0}\n\n`;
+    md += `- **Protected Holdings**: ${gttData.total_protected_holdings || (gttData.protected_holdings?.length || 0)} / ${portfolioData?.holdings?.length || 0}\n\n`;
     
     if (gttData.stale_gtts && gttData.stale_gtts.length > 0) {
         md += `### Stale GTTs (Need Update)\n`;

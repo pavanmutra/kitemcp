@@ -18,7 +18,13 @@
     "status": "node src/check_gates.js",
     "dashboard": "node src/dashboard.js",
     "web": "node src/server.js",
-    "help": "node -e \"console.log('\\nAvailable Commands:\\n npm start\\t\\tRun full daily workflow\\n npm run check\\tCheck gate status\\n npm run dashboard\\tQuick CLI portfolio summary\\n npm run report\\tGenerate daily Markdown report\\n npm run export\\tGenerate portfolio Excel\\n npm run web\\t\\tStart web dashboard\\n')\""
+    "dev": "node src/server.js",
+    "refresh": "node src/scripts/refresh_live_prices.js",
+    "test": "node node_modules/jest/bin/jest.js src/__tests__ --no-coverage --forceExit && node src/test_runner.js",
+    "test:unit": "node node_modules/jest/bin/jest.js src/__tests__ --no-coverage --forceExit",
+    "test:integration": "node src/test_runner.js",
+    "test:api": "node src/test_runner.js --api",
+    "help": "node -e \"console.log('\\nAvailable Commands:\\n npm start\\t\\tRun full daily workflow\\n npm run check\\t\\tCheck gate status\\n npm run dashboard\\tQuick CLI portfolio summary\\n npm run report\\t\\tGenerate daily Markdown report\\n npm run export\\t\\tGenerate portfolio Excel\\n npm run refresh\\t\\tRefresh live prices via AI agent\\n npm run web\\t\\tStart web dashboard (auto-opens browser)\\n npm test\\t\\tRun unit + integration tests (all suites)\\n npm run test:unit\\tUnit tests only (116 tests)\\n npm run test:integration\\tIntegration tests only (53 tests)\\n')\""
   },
   "dependencies": {
     "exceljs": "^4.4.0",

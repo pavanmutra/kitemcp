@@ -5,7 +5,16 @@
 
 const express = require('express');
 const path = require('path');
+const { exec } = require('child_process');
 const apiRoutes = require('./routes/api');
+
+function openBrowser(url) {
+    const cmd = process.platform === 'win32' ? `start ${url}` :
+                process.platform === 'darwin' ? `open ${url}` : `xdg-open ${url}`;
+    exec(cmd, (err) => {
+        if (err) console.warn('Could not auto-open browser:', err.message);
+    });
+}
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -49,6 +58,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`\n🚀 KiteMCP Dashboard running at http://localhost:${PORT}`);
     console.log(`   Press Ctrl+C to stop the server\n`);
+    openBrowser(`http://localhost:${PORT}`);
 });
 
 module.exports = app;

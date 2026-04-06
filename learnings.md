@@ -364,7 +364,216 @@ ROOT CAUSE:
 
 ---
 
-### ❌ MISTAKE T-006 — Google Search API Not Configured (404 Project Not Found)
+---
+
+### ❌ MISTAKE T-007 — JSON Schema Mismatch Between AI Output and Consumer Scripts
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  Ran full daily workflow (GATE 0-4). AI saved JSON files to reports/.
+  create_master_markdown.js crashed when trying to read opportunities JSON:
+  - Script expected: opportunities: [] (flat array)
+  - AI saved: horizons: { short_term: [], medium_term: [], long_term: [] }
+  - Script expected: commodities: [{symbol, price}] 
+  - AI saved: GOLD: {price}, SILVER: {price}, etc.
+  Multiple script crashes across opportunities, commodities, news data.
+  Had to manually fix and re-save all 3 JSON files.
+
+ROOT CAUSE:
+  AI generated JSON with nested/labeled structure for human readability.
+  Node.js scripts expected flat arrays with specific field names.
+  No schema contract between AI output and script consumers.
+
+⛔ NEVER DO:
+  Save JSON to reports/ without verifying it matches the schema expected
+  by the consuming Node.js script.
+  Generate nested/labeled structures when flat arrays are required.
+
+✅ FIX / RULE ADDED:
+  CHECKLIST: Before saving ANY JSON to reports/:
+    [ ] Read create_master_markdown.js or create_portfolio_export.js
+        to find what schema they expect
+    [ ] Verify top-level structure matches (array vs object)
+    [ ] Verify field names match (symbol vs name, price vs current_price)
+    [ ] Verify array items have required fields
+    [ ] Test-run the consumer script after saving JSON
+    [ ] If script crashes → fix JSON schema, re-save, re-test
+  
+  SCRIPT SCHEMA REQUIREMENTS (as of 2026-04-06):
+  - opportunities.json: { opportunities: [{symbol, horizon, current_price, ...}] }
+  - commodities.json: { commodities: [{symbol, price, change_pct, trend, ...}] }
+  - news_opportunities.json: { news: [{headline, source, impact_score, ...}] }
+  - value_screen.json: { stocks: [{symbol, current_price, intrinsic_value_avg, ...}] }
+  - portfolio_snapshot.json: { holdings: [{symbol, qty, avg_price, last_price, ...}] }
+  
+  Rule P-011 and P-018 added to master rules.
+```
+
+---
+
+---
+
+### ❌ MISTAKE T-009 — Script Array-to-String Bug Shows [object Object] in Report
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  GTT audit section of daily report showed "Protected Holdings: [object Object],[object Object],..."
+  instead of a count. Script used array in string concatenation: `${array || 0}`.
+
+ROOT CAUSE:
+  gttData.protected_holdings is an array. When used in template string without .length,
+  JavaScript calls .toString() which outputs "[object Object]" for each item.
+
+⛔ NEVER DO:
+  Use an array directly in string interpolation without checking if it's array first.
+
+✅ FIX / RULE ADDED:
+  create_master_markdown.js line 133 now uses:
+    ${gttData.total_protected_holdings || (gttData.protected_holdings?.length || 0)}
+  Always use .length for arrays, or a dedicated count field.
+```
+
+---
+
+### ❌ MISTAKE T-011 — Dashboard API Path Bug (Double Date Prefix)
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  Dashboard showed "Current Value: empty" for all holdings.
+  API returned portfolio: null even though JSON files existed.
+  Root cause: API searched for wrong file paths.
+
+ROOT CAUSE:
+  Files are named "YYYY-MM-DD_portfolio_snapshot.json" (with date prefix).
+  API called readReportJSON(date, 'portfolio_snapshot.json').
+  readReportJSON constructed path: reports/2026-04-06/raw_data/portfolio_snapshot.json
+  Actual path: reports/2026-04-06/raw_data/2026-04-06_portfolio_snapshot.json
+  
+  All 7 API endpoints used wrong path construction.
+
+⛔ NEVER DO:
+  Assume filename parameter doesn't need date prefix when files include date in name.
+
+✅ FIX / RULE ADDED:
+  Changed all API endpoints to prepend date to filename:
+    readReportJSON(date, `${date}_portfolio_snapshot.json`)
+  Fixed readReportJSON locations array to search correct paths first.
+  Fixed 7 endpoints: /dashboard, /portfolio, /valuescreen, /gtt,
+    /opportunities, /news, /commodities, /data-status
+```
+
+---
+
+### ❌ MISTAKE T-012 — Holdings Missing current_value Field (Value Column Empty)
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  Dashboard holdings table showed empty/nan in the "Value" column.
+  Portfolio API returned data correctly but Value column was blank.
+
+ROOT CAUSE:
+  Portfolio snapshot JSON stores holdings without a `current_value` field.
+  The frontend table expected `h.current_value` which was always undefined.
+  `current_value` = qty × current_price must be computed client-side.
+
+⛔ NEVER DO:
+  Assume consumer scripts add missing computed fields automatically.
+
+✅ FIX / RULE ADDED:
+  Fixed app.js renderHoldingsTable() to compute current_value:
+    const qty = h.quantity || h.qty || h.t1_quantity || 0;
+    const price = h.current_price || h.last_price || 0;
+    const currentValue = qty * price;
+  Also fixed sort by value to use computed values.
+  T+1 pending stocks show "qty (T+1)" format.
+```
+
+---
+
+### ❌ MISTAKE T-013 — Jest Test Setup Issues
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  Three Jest testing issues encountered while setting up unit tests:
+  1. check_gates.js calls process.exit() at top-level on require → crashes Jest
+  2. normalizeHoldings crashes on null input (default [] bypassed)
+  3. formatters boundary test used wrong expected values (1Cr threshold)
+
+⛔ NEVER DO:
+  Call process.exit() at module top-level — guard with require.main === module
+  Pass null to functions with default params ([] doesn't protect against null)
+  Hardcode boundary expectations without verifying function logic
+
+✅ FIX / RULE ADDED:
+  Added if (require.main === module) guard to check_gates.js main block
+  Added module.exports = { fileAgeMinutes, findGateFile, GATES } for testability
+  Fixed normalizeHoldings tests to expect TypeError on null input
+  Fixed formatCurrency boundary test — 9999999 is Lakh (100L), not plain
+  Created src/__tests__/ with 116 unit tests (all passing)
+  Created src/test_runner.js with 53 integration tests (all passing)
+```
+
+---
+
+### ❌ MISTAKE T-010 — Dashboard Shows Stale Data Without Warning
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  Dashboard showed yesterday's portfolio prices as if they were current.
+  No warning indicated the data was stale.
+  User made decisions based on outdated information.
+
+ROOT CAUSE:
+  Dashboard reads static JSON files. No live price connection.
+  No stale data detection or warning mechanism.
+  KiteMCP uses OAuth sessions that can't be called from Node.js directly.
+
+⛔ NEVER DO:
+  Trust dashboard prices as live without confirming data freshness.
+  Open dashboard without running AI agent refresh first.
+  Assume the data is current just because the dashboard loads.
+
+✅ FIX / RULE ADDED:
+  Added stale data warning banner when viewing historical dates or old data.
+  Added "🔄 Refresh with AI" button to trigger AI agent price update.
+  Added lastRefreshed timestamp and live indicator to dashboard.
+  Added /api/data-status endpoint for freshness checking.
+  Rule: Always run "npm run refresh" → complete AI prompt → open "npm run web"
+  
+  WORKFLOW:
+  1. npm run refresh → Copy prompt → Paste into OpenCode
+  2. AI fetches live prices → Updates JSON files
+  3. npm run web → Dashboard loads with LIVE data
+  4. During market hours: Click "Refresh with AI" for live prices anytime
+```
+
+---
+
+### ❌ MISTAKE T-008 — Server Doesn't Auto-Open Browser on Startup
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  Updated AGENTS.md to say "npm run web opens http://localhost:3000".
+  Ran npm run web. Server started but no browser opened.
+  User had to manually navigate to the URL.
+  Frustrating for workflow - defeats the purpose of the shortcut.
+
+ROOT CAUSE:
+  server.js used console.log to announce the URL but didn't actually
+  open the browser. The npm run web command didn't include a browser open step.
+
+⛔ NEVER DO:
+  Document a command as "opens browser" without actually opening it.
+  Assume users will always manually navigate.
+
+✅ FIX / RULE ADDED:
+  server.js now uses child_process.exec() to auto-open browser:
+    - Windows: start <url>
+    - macOS: open <url>
+    - Linux: xg-open <url>
+  package.json has both "web" and "dev" scripts pointing to server.js
+  AGENTS.md now correctly documents: npm run web → starts + opens browser
+```
 ```
 DATE     : 2026-03-31
 WHAT HAPPENED:
@@ -456,6 +665,78 @@ ROOT CAUSE:
 ✅ FIX / RULE ADDED:
   report-generator checks if xlsx is locked before writing.
   If locked → alert user: "Close Excel first" and pause.
+```
+
+---
+
+### ❌ MISTAKE T-007 — JSON Schema Mismatch Between AI Output and Script Consumers
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  create_master_markdown.js crashed with TypeError on 4 different fields:
+  1. oppData.opportunities.forEach — AI saved as nested {horizons:{short_term:[]}} 
+     but script expected flat {opportunities:[]}
+  2. commodityData.commodities.forEach — AI saved as {GOLD:{}, SILVER:{}}
+     but script expected [{symbol:.., price:..}]
+  3. oppData.opportunities[0].upside_pct — script used wrong field name
+  4. valueData.stocks — AI saved as {holdings_analysis:[]} not {stocks:[]}
+
+  Root cause: AI generates JSON with human-readable structure; Node scripts expect 
+  machine-readable array format. Mismatch causes silent failures (data not rendered)
+  or hard crashes (forEach on non-array).
+
+ROOT CAUSE:
+  No schema enforcement. AI is creative with JSON structure.
+  Scripts fail silently or crash. No validation before saving.
+
+⛔ NEVER DO:
+  Save AI-generated JSON to reports/ without validating the schema
+  against what the consuming script expects.
+  Do not assume AI will use the same structure the script expects.
+
+✅ FIX / RULE ADDED:
+  After every AI-generated JSON save to reports/:
+    [ ] Check schema BEFORE saving: Does it match what the consumer script expects?
+    [ ] If script expects array [{}] — ensure AI outputs array, not object {items:[]}
+    [ ] If script expects field "stocks" — don't save as "holdings_analysis"
+    [ ] If script expects field "current_price" — don't use "last_price" interchangeably
+    [ ] Run the consumer script immediately to verify it doesn't crash
+    [ ] If crash occurs — FIX the JSON schema, re-save, re-run
+  Rule P-011 + Rule P-024 added to master rules.
+  Rule P-017: Every new JSON field must be validated against consumer script
+  before saving to reports/.
+```
+
+---
+
+### ❌ MISTAKE P-014 — GTT Duplicates Across Exchanges (NSE/BSE) Causing Qty Mismatch
+```
+DATE     : 2026-04-06
+WHAT HAPPENED:
+  Found 4 existing GTTs conflicting with new placements:
+  - TMCV had GTT on BSE @₹320 (qty 110) AND on NSE @₹450 (qty 110)
+    while holding was 160 shares on BSE only
+  - NXST had 3 GTTs across exchanges with overlapping triggers
+  Had to delete 4 GTTs, costing time and risking order confusion
+
+ROOT CAUSE:
+  Never checked existing GTTs before placing new ones.
+  Each placement was treated as independent — no cross-check.
+  Same stock listed on both BSE and NSE created confusion.
+
+⛔ NEVER DO:
+  Place a GTT without first checking kite.getGTTs() for existing GTTs
+  on the SAME symbol, ANY exchange.
+  Assume no duplicates exist from previous sessions.
+
+✅ FIX / RULE ADDED:
+  Pre-GTT checklist (add to GTT manager workflow):
+    [ ] Fetch kite.getGTTs() BEFORE any placement
+    [ ] Check ALL exchanges (NSE + BSE) for same symbol
+    [ ] Verify qty in GTT matches current holding qty
+    [ ] If duplicate found: DELETE old GTT first, then place new
+    [ ] If partial qty overlap: DELETE old, PLACE new with full qty
+  Rule P-016 added to master rules.
 ```
 
 ---
@@ -721,9 +1002,20 @@ These rules are auto-checked by agents. Any violation = hard stop.
     If Google search tool fails, use DuckDuckGo or Bing via webfetch.
 27  Tata Motors uses TMCV/TMPV symbols only              P-009
 28  Update agents/learnings/gates after every change    P-013
-29  Verify symbol via web search before adding          P-014
-30  For REIT/ETF/Index units, confirm screener alias     P-015
-31  Check existing GTTs before placing new ones          P-016
+ 29  Verify symbol via web search before adding          P-014
+ 30  For REIT/ETF/Index units, confirm screener alias     P-015
+ 31  Check existing GTTs before placing new ones          P-016
+ 32  Validate JSON schema before saving to reports/       T-007
+ 33  Read consumer script schema before saving JSON        T-007
+ 34  Server auto-opens browser on npm run web            T-008
+ 35  Use .length for arrays in string interpolation       T-009
+ 36  Always refresh via AI agent before dashboard        T-010
+ 37  Dashboard data is stale until AI refresh completes  T-010
+ 38  Compute missing fields client-side (qty×price)      T-012
+ 39  Use flexible field mapping for T+1 pending stocks   T-012
+ 40  Mock process.exit before require() in Jest tests    T-013
+ 41  Test files with guard if require.main===module      T-013
+ 42  Use typeof check not Array.isArray for null guard   T-013
  ─────────────────────────────────────────────────────────────────────
 ```
 

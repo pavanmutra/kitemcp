@@ -29,14 +29,15 @@ function getAvailableDates() {
 
 /**
  * Helper: Read JSON file safely
+ * Note: filename already includes date prefix (e.g., "2026-04-06_portfolio_snapshot.json")
  */
 function readReportJSON(date, filename) {
-    // Try different locations
+    // Try different locations - filename already includes date prefix
     const locations = [
-        path.join(REPORTS_DIR, `${date}_${filename}`),
-        path.join(REPORTS_DIR, date, 'raw_data', `${date}_${filename}`),
-        path.join(REPORTS_DIR, date, filename),
-        path.join(REPORTS_DIR, 'archive', date, 'raw_data', `${date}_${filename}`),
+        path.join(REPORTS_DIR, date, 'raw_data', filename),      // reports/2026-04-06/raw_data/2026-04-06_portfolio_snapshot.json
+        path.join(REPORTS_DIR, date, filename),                 // reports/2026-04-06/2026-04-06_portfolio_snapshot.json
+        path.join(REPORTS_DIR, `${date}_${filename}`),         // reports/2026-04-06_2026-04-06_portfolio_snapshot.json (legacy)
+        path.join(REPORTS_DIR, 'archive', date, 'raw_data', filename),
     ];
 
     for (const loc of locations) {
@@ -64,7 +65,7 @@ router.get('/dates', (req, res) => {
  */
 router.get('/portfolio', (req, res) => {
     const date = req.query.date || getAvailableDates()[0] || new Date().toISOString().split('T')[0];
-    const data = readReportJSON(date, 'portfolio_snapshot.json');
+    const data = readReportJSON(date, `${date}_portfolio_snapshot.json`);
     if (data) {
         res.json(data);
     } else {
@@ -77,7 +78,7 @@ router.get('/portfolio', (req, res) => {
  */
 router.get('/valuescreen', (req, res) => {
     const date = req.query.date || getAvailableDates()[0] || new Date().toISOString().split('T')[0];
-    const data = readReportJSON(date, 'value_screen.json');
+    const data = readReportJSON(date, `${date}_value_screen.json`);
     if (data) {
         res.json(data);
     } else {
@@ -90,7 +91,7 @@ router.get('/valuescreen', (req, res) => {
  */
 router.get('/gtt', (req, res) => {
     const date = req.query.date || getAvailableDates()[0] || new Date().toISOString().split('T')[0];
-    const data = readReportJSON(date, 'gtt_audit.json');
+    const data = readReportJSON(date, `${date}_gtt_audit.json`);
     if (data) {
         res.json(data);
     } else {
@@ -103,7 +104,7 @@ router.get('/gtt', (req, res) => {
  */
 router.get('/opportunities', (req, res) => {
     const date = req.query.date || getAvailableDates()[0] || new Date().toISOString().split('T')[0];
-    const data = readReportJSON(date, 'opportunities.json');
+    const data = readReportJSON(date, `${date}_opportunities.json`);
     if (data) {
         res.json(data);
     } else {
@@ -116,7 +117,7 @@ router.get('/opportunities', (req, res) => {
  */
 router.get('/news', (req, res) => {
     const date = req.query.date || getAvailableDates()[0] || new Date().toISOString().split('T')[0];
-    const data = readReportJSON(date, 'news_opportunities.json');
+    const data = readReportJSON(date, `${date}_news_opportunities.json`);
     if (data) {
         res.json(data);
     } else {
@@ -129,7 +130,7 @@ router.get('/news', (req, res) => {
  */
 router.get('/commodities', (req, res) => {
     const date = req.query.date || getAvailableDates()[0] || new Date().toISOString().split('T')[0];
-    const data = readReportJSON(date, 'commodity_opportunities.json');
+    const data = readReportJSON(date, `${date}_commodity_opportunities.json`);
     if (data) {
         res.json(data);
     } else {
@@ -143,12 +144,38 @@ router.get('/commodities', (req, res) => {
 router.get('/dashboard', (req, res) => {
     const date = req.query.date || getAvailableDates()[0] || new Date().toISOString().split('T')[0];
     
-    const portfolio = readReportJSON(date, 'portfolio_snapshot.json');
-    const valuescreen = readReportJSON(date, 'value_screen.json');
-    const gtt = readReportJSON(date, 'gtt_audit.json');
-    const opportunities = readReportJSON(date, 'opportunities.json');
-    const news = readReportJSON(date, 'news_opportunities.json');
-    const commodities = readReportJSON(date, 'commodity_opportunities.json');
+    // Prepend date to filename since files are named "YYYY-MM-DD_filename.json"
+    let portfolio = readReportJSON(date, `${date}_portfolio_snapshot.json`);
+    const valuescreen = readReportJSON(date, `${date}_value_screen.json`);
+    const gtt = readReportJSON(date, `${date}_gtt_audit.json`);
+    const opportunities = readReportJSON(date, `${date}_opportunities.json`);
+    const news = readReportJSON(date, `${date}_news_opportunities.json`);
+    const commodities = readReportJSON(date, `${date}_commodity_opportunities.json`);
+    
+    // Enrich portfolio holdings with MoS from value_screen
+    if (portfolio?.holdings && valuescreen?.stocks) {
+        const valuescreenMap = {};
+        valuescreen.stocks.forEach(s => {
+            valuescreenMap[s.symbol] = {
+                margin_of_safety_pct: s.margin_of_safety_pct,
+                intrinsic_value_avg: s.intrinsic_value_avg
+            };
+        });
+        
+        portfolio.holdings.forEach(h => {
+            const vs = valuescreenMap[h.symbol];
+            if (vs) {
+                // Set MoS from value_screen if not set or 0
+                if (!h.mos_pct || h.mos_pct === 0) {
+                    h.mos_pct = vs.margin_of_safety_pct ?? h.mos_pct;
+                }
+                // Set IV from value_screen
+                if (vs.intrinsic_value_avg && vs.intrinsic_value_avg > 0) {
+                    h.intrinsic_value_avg = vs.intrinsic_value_avg;
+                }
+            }
+        });
+    }
     
     res.json({
         date,
@@ -200,6 +227,155 @@ router.get('/deep-value', (req, res) => {
         }
     } catch (e) {
         res.status(500).json({ error: 'Error reading deep value data' });
+    }
+});
+
+/**
+ * GET /api/data-status - Get data freshness info
+ */
+router.get('/data-status', (req, res) => {
+    const today = new Date().toISOString().split('T')[0];
+    const availableDates = getAvailableDates();
+    const latestDate = availableDates[0] || today;
+    
+    const portfolio = readReportJSON(latestDate, `${latestDate}_portfolio_snapshot.json`);
+    
+    // Check if today's data exists
+    const isToday = latestDate === today;
+    
+    // Calculate freshness
+    let lastRefreshed = null;
+    let freshness = 'unknown';
+    
+    if (portfolio?.execution_time) {
+        lastRefreshed = portfolio.execution_time;
+        
+        // Determine freshness
+        if (isToday) {
+            // Check if refreshed recently
+            const execTime = new Date(portfolio.execution_time);
+            const now = new Date();
+            const minutesAgo = (now - execTime) / 60000;
+            
+            if (minutesAgo < 5) freshness = 'current';
+            else if (minutesAgo < 30) freshness = 'recent';
+            else freshness = 'stale';
+        } else {
+            freshness = 'historical';
+        }
+    } else {
+        freshness = isToday ? 'empty' : 'historical';
+    }
+    
+    // Get market status
+    const now = new Date();
+    const istHour = (now.getUTCHours() + 5.5) % 24;
+    const istMinute = now.getUTCMinutes() + 30;
+    const istTotalMinutes = istHour * 60 + istMinute;
+    const marketOpen = 9 * 60 + 15;
+    const marketClose = 15 * 60 + 30;
+    const isWeekend = now.getUTCDay() === 0 || now.getUTCDay() === 6;
+    const isMarketOpen = istTotalMinutes >= marketOpen && istTotalMinutes <= marketClose && !isWeekend;
+    
+    res.json({
+        currentDate: today,
+        dataDate: latestDate,
+        isToday,
+        isStale: !isToday || freshness === 'stale',
+        lastRefreshed,
+        freshness,
+        isMarketOpen,
+        marketInfo: {
+            isOpen: isMarketOpen,
+            nextOpen: isMarketOpen ? null : (istTotalMinutes < marketOpen ? 'Today 9:15 AM' : 'Next trading day'),
+            nextClose: isMarketOpen ? '3:30 PM' : null
+        },
+        recommendations: getRecommendations(freshness, isMarketOpen)
+    });
+});
+
+/**
+ * Get recommendations based on data freshness
+ */
+function getRecommendations(freshness, isMarketOpen) {
+    const recs = [];
+    
+    if (freshness === 'historical') {
+        recs.push({
+            type: 'warning',
+            message: 'Showing historical data. Run AI agent refresh for today\'s prices.',
+            action: 'npm run refresh'
+        });
+    }
+    
+    if (freshness === 'stale' && isMarketOpen) {
+        recs.push({
+            type: 'warning',
+            message: 'Data is older than 30 minutes. Refresh for live prices.',
+            action: 'Click "Refresh with AI" button'
+        });
+    }
+    
+    if (freshness === 'current' || freshness === 'recent') {
+        recs.push({
+            type: 'success',
+            message: 'Data is current.',
+            action: null
+        });
+    }
+    
+    if (isMarketOpen && (freshness === 'stale' || freshness === 'historical')) {
+        recs.push({
+            type: 'info',
+            message: 'Market is open. Live prices available.',
+            action: 'Refresh now'
+        });
+    }
+    
+    return recs;
+}
+
+/**
+ * POST /api/quick-refresh - Lightweight refresh that updates only timestamps
+ * Note: Actual price refresh requires AI agent (npm run refresh)
+ */
+router.post('/quick-refresh', (req, res) => {
+    const today = new Date().toISOString().split('T')[0];
+    const rawDir = path.join(REPORTS_DIR, today, 'raw_data');
+    
+    try {
+        // Ensure directory exists
+        if (!fs.existsSync(rawDir)) {
+            fs.mkdirSync(rawDir, { recursive: true });
+        }
+        
+        const snapshotPath = path.join(rawDir, `${today}_portfolio_snapshot.json`);
+        
+        let portfolio = null;
+        if (fs.existsSync(snapshotPath)) {
+            portfolio = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+            portfolio.execution_time = new Date().toISOString();
+            portfolio.is_live = false; // Flag that this is timestamp-only refresh
+            fs.writeFileSync(snapshotPath, JSON.stringify(portfolio, null, 2));
+        }
+        
+        res.json({
+            success: true,
+            message: 'Quick refresh completed. Note: Prices are still from last AI agent refresh. Run "npm run refresh" for live prices.',
+            dataDate: today,
+            hasLivePrices: false,
+            recommendations: [
+                'Run "npm run refresh" in terminal for live prices via AI agent',
+                'Or click "Refresh with AI" button in dashboard'
+            ]
+        });
+        
+    } catch (e) {
+        res.status(500).json({
+            success: false,
+            error: 'Quick refresh failed',
+            detail: e.message
+        });
     }
 });
 

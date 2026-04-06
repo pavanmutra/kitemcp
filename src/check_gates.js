@@ -171,6 +171,8 @@ function fileAgeMinutes(filePath) {
   } catch { return null; }
 }
 
+// Only run gate check when executed as CLI (not when imported by tests)
+if (require.main === module) {
 // ─── main ────────────────────────────────────────────────────────────────────
 console.log(`\n${BOLD}${BLUE}═══════════════════════════════════════════════════${RESET}`);
 console.log(`${BOLD}  KiteMCP Pre-Flight Gate Check — ${today}${RESET}`);
@@ -219,3 +221,7 @@ if (hardBlock) {
   console.log(`\n${BOLD}${GREEN}✅ ALL GATES PASSED — Safe to proceed with order execution.${RESET}\n`);
   process.exit(0);
 }
+}
+
+// Export for unit testing
+module.exports = { fileAgeMinutes, findGateFile, GATES };

@@ -18,6 +18,13 @@
 </head>
 <body>
     <div class="app-container">
+        <!-- Stale Data Warning Banner -->
+        <div id="staleWarning" class="stale-warning" style="display: none;">
+            <span class="stale-icon">⚠️</span>
+            <span class="stale-message">Data may be outdated</span>
+            <span class="stale-action">Click "Refresh with AI" for live prices →</span>
+        </div>
+
         <!-- Header -->
         <header class="header">
             <div class="header-left">
@@ -33,11 +40,15 @@
                     <span class="status-dot"></span>
                     <span class="status-text">Loading...</span>
                 </div>
+                <span id="liveIndicator" class="live-indicator" style="margin-left: 12px; font-size: 0.75rem; color: #6b7280;">Stale</span>
             </div>
             
             <div class="header-right">
                 <button class="btn btn-icon" id="maskToggleBtn" title="Toggle visibility">
                     <span id="maskIcon">👁️</span>
+                </button>
+                <button class="btn btn-ai" id="refreshAIBtn" title="Refresh with AI Agent for live prices">
+                    🔄 Refresh with AI
                 </button>
                 <div class="date-picker">
                     <label for="reportDate" class="sr-only">Select Report Date</label>
@@ -50,7 +61,7 @@
                 </button>
                 <div class="last-updated" id="lastUpdated">
                     <span class="sr-only">Last updated:</span>
-                    <time>--:--</time>
+                    <time id="lastRefreshTime">--:--</time>
                 </div>
             </div>
         </header>
@@ -138,14 +149,16 @@
                                     <th scope="col" class="text-right">Qty</th>
                                     <th scope="col" class="text-right">Avg Price</th>
                                     <th scope="col" class="text-right">CMP</th>
+                                    <th scope="col" class="text-right">IV</th>
                                     <th scope="col" class="text-right">Current Value</th>
                                     <th scope="col" class="text-right">P&L</th>
                                     <th scope="col" class="text-right">P&L %</th>
+                                    <th scope="col" class="text-right">MoS %</th>
                                     <th scope="col">Status</th>
                                 </tr>
                             </thead>
                             <tbody id="holdingsBody">
-                                <tr><td colspan="9" class="loading">Loading holdings...</td></tr>
+                                <tr><td colspan="11" class="loading">Loading holdings...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -257,6 +270,6 @@
     </div>
     
     <!-- Scripts -->
-    <script src="/js/app.js?v=3"></script>
+    <script src="/js/app.js?v=6"></script>
 </body>
 </html>
