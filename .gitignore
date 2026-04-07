@@ -5,6 +5,32 @@ node_modules/
 reports/*.docx
 reports/*.xlsx
 reports/archive/
+reports/Latest_Report.md
+reports/Latest_Portfolio.xlsx
+reports/deep_value_screener.json
+reports/*_daily_report.md
+reports/*_WORKFLOW_COMPLETE.md
+reports/*_gate_status.json
+reports/*_verification_gate*.json
+reports/*_GATE*_*.md
+reports/*_report*.docx
+reports/*_report*.md
+reports/*_opportunities.json
+reports/*_news_opportunities.json
+reports/*_commodity_opportunities.json
+reports/*_portfolio_snapshot.json
+reports/*_value_screen.json
+reports/*_gtt_audit.json
+reports/*_gtt_placement.json
+reports/*_buyback_opportunities.json
+reports/*_risk_assessment.json
+reports/*_rebalancing.json
+reports/*_tax_optimization.json
+reports/*_dividend_calendar.json
+reports/2026-*/
+indian_deep_value_stocks.md
+indian_deep_value_screener_prompts.md
+stock_analysis_report.md
 
 # Sensitive / personal files
 cookies.txt
@@ -18,10 +44,5 @@ Thumbs.db
 .vscode/
 *.swp
 
-# Keep these committed:
-# reports/*.json  ← AI-generated data, useful for history
-# reports/*.md    ← markdown notes, useful for history
-
 # Secrets
 .secrets/
-
