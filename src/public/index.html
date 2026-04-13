@@ -96,6 +96,16 @@
                     </article>
                 </div>
             </section>
+
+            <section class="alert-strip" aria-label="Margin of Safety Alerts">
+                <div class="alert-strip-head">
+                    <h2>MoS Alerts</h2>
+                    <span class="badge" id="mosAlertCount">0</span>
+                </div>
+                <div id="mosAlertPanel" class="alert-strip-panel">
+                    <p class="empty-state">No MoS alerts available.</p>
+                </div>
+            </section>
             
             <!-- Tab Navigation -->
             <nav class="tabs" role="tablist" aria-label="Dashboard sections">
@@ -106,6 +116,18 @@
                 <button class="tab" role="tab" aria-selected="false" data-tab="alerts" id="tab-alerts">
                     <span class="tab-icon">🎯</span>
                     <span class="tab-label">Deep Discounts</span>
+                </button>
+                <button class="tab" role="tab" aria-selected="false" data-tab="risk" id="tab-risk">
+                    <span class="tab-icon">🧯</span>
+                    <span class="tab-label">Risk</span>
+                </button>
+                <button class="tab" role="tab" aria-selected="false" data-tab="concentration" id="tab-concentration">
+                    <span class="tab-icon">🧩</span>
+                    <span class="tab-label">Concentration</span>
+                </button>
+                <button class="tab" role="tab" aria-selected="false" data-tab="calendar" id="tab-calendar">
+                    <span class="tab-icon">📅</span>
+                    <span class="tab-label">Buyback Calendar</span>
                 </button>
                 <button class="tab" role="tab" aria-selected="false" data-tab="gtt" id="tab-gtt">
                     <span class="tab-icon">🛡️</span>
@@ -171,6 +193,36 @@
                     </div>
                     <div class="alerts-grid" id="discountsGrid">
                         <p class="empty-state">No deep discount stocks found.</p>
+                    </div>
+                </section>
+
+                <!-- Risk Tab -->
+                <section class="tab-panel" role="tabpanel" id="panel-risk" aria-labelledby="tab-risk" hidden>
+                    <div class="panel-header">
+                        <h2>Position Risk Tracker</h2>
+                    </div>
+                    <div class="risk-grid" id="riskGrid">
+                        <p class="empty-state">Risk data not available.</p>
+                    </div>
+                </section>
+
+                <!-- Concentration Tab -->
+                <section class="tab-panel" role="tabpanel" id="panel-concentration" aria-labelledby="tab-concentration" hidden>
+                    <div class="panel-header">
+                        <h2>Portfolio Concentration</h2>
+                    </div>
+                    <div class="concentration-grid" id="concentrationGrid">
+                        <p class="empty-state">Concentration data not available.</p>
+                    </div>
+                </section>
+
+                <!-- Dividend / Buyback Calendar -->
+                <section class="tab-panel" role="tabpanel" id="panel-calendar" aria-labelledby="tab-calendar" hidden>
+                    <div class="panel-header">
+                        <h2>Buyback Calendar</h2>
+                    </div>
+                    <div class="calendar-grid" id="calendarGrid">
+                        <p class="empty-state">Calendar data not available.</p>
                     </div>
                 </section>
                 

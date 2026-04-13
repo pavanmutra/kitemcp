@@ -6,6 +6,7 @@
 const express = require('express');
 const path = require('path');
 const { exec } = require('child_process');
+const http = require('http');
 const apiRoutes = require('./routes/api');
 
 function openBrowser(url) {
@@ -16,8 +17,9 @@ function openBrowser(url) {
     });
 }
 
-const PORT = process.env.PORT || 3000;
 const app = express();
+const DEFAULT_PORT = Number(process.env.PORT) || 3000;
+const MAX_PORT_TRIES = 10;
 
 // Middleware
 app.use(express.json());
@@ -54,11 +56,29 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
+function startServer(port, attempt = 0) {
+    const server = http.createServer(app);
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE' && attempt < MAX_PORT_TRIES) {
+            startServer(port + 1, attempt + 1);
+            return;
+        }
+
+        console.error('Failed to start dashboard server:', err.message);
+        process.exit(1);
+    });
+
+    server.listen(port, () => {
+        const actualPort = server.address().port;
+
+        console.log(`\n🚀 KiteMCP Dashboard running at http://localhost:${actualPort}`);
+        console.log('   Press Ctrl+C to stop the server\n');
+        openBrowser(`http://localhost:${actualPort}`);
+    });
+}
+
 // Start server
-app.listen(PORT, () => {
-    console.log(`\n🚀 KiteMCP Dashboard running at http://localhost:${PORT}`);
-    console.log('   Press Ctrl+C to stop the server\n');
-    openBrowser(`http://localhost:${PORT}`);
-});
+startServer(DEFAULT_PORT);
 
 module.exports = app;

@@ -87,10 +87,12 @@ async function writeJsonFileAsync(filepath, data) {
 /**
  * Find and read a report JSON file across all possible locations.
  * Search order:
- *   1. reports/YYYY-MM-DD_filename.json  (flat root — before organize)
- *   2. reports/YYYY-MM-DD/data/filename.json  (organized structure)
- *   3. reports/archive/YYYY-MM-DD/filename.json  (archived)
- *   4. reports/archive/YYYY-MM-DD/data/filename.json  (archived + organized)
+ *   1. reports/YYYY-MM-DD/raw_data/filename.json  (current daily workflow)
+ *   2. reports/YYYY-MM-DD/filename.json  (organized structure)
+ *   3. reports/YYYY-MM-DD_filename.json  (legacy flat root)
+ *   4. reports/archive/YYYY-MM-DD/raw_data/filename.json  (archived current layout)
+ *   5. reports/archive/YYYY-MM-DD/filename.json  (archived organized)
+ *   6. reports/archive/YYYY-MM-DD/YYYY-MM-DD_filename.json  (archived legacy flat)
  *
  * @param {string} date - Date string YYYY-MM-DD
  * @param {string} filename - Base filename without date prefix, e.g. "portfolio_snapshot.json"
@@ -101,16 +103,12 @@ function findReport(date, filename, reportsDir) {
     const dir = reportsDir || path.join(process.cwd(), 'reports');
     
     const searchPaths = [
-        // 1. Flat root: reports/YYYY-MM-DD_filename
+        path.join(dir, date, 'raw_data', filename),
+        path.join(dir, date, filename),
         path.join(dir, `${date}_${filename}`),
-        // 2. Organized: reports/YYYY-MM-DD/data/filename
-        path.join(dir, date, 'data', filename),
-        // 3. Archive flat: reports/archive/YYYY-MM-DD/filename
+        path.join(dir, 'archive', date, 'raw_data', filename),
         path.join(dir, 'archive', date, filename),
-        // 4. Archive with date prefix: reports/archive/YYYY-MM-DD/YYYY-MM-DD_filename
-        path.join(dir, 'archive', date, `${date}_${filename}`),
-        // 5. Archive organized: reports/archive/YYYY-MM-DD/data/filename
-        path.join(dir, 'archive', date, 'data', filename)
+        path.join(dir, 'archive', date, `${date}_${filename}`)
     ];
     
     for (const p of searchPaths) {

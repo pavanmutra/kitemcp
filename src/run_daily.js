@@ -58,13 +58,15 @@ console.log(`${Y}└────────────────────
 const REQUIRED_JSON = [
   `${TODAY}_portfolio_snapshot.json`,
   `${TODAY}_value_screen.json`,
-  `${TODAY}_gtt_audit.json`
+  `${TODAY}_gtt_audit.json`,
+  `${TODAY}_dividend_calendar.json`
 ];
 
 const OPTIONAL_JSON = [
   `${TODAY}_opportunities.json`,
   `${TODAY}_news_opportunities.json`,
-  `${TODAY}_commodity_opportunities.json`
+  `${TODAY}_commodity_opportunities.json`,
+  `${TODAY}_risk_assessment.json`
 ];
 
 // Track what's been seen
@@ -101,11 +103,13 @@ if (allRequiredReady()) {
   const ok2 = runScript('create_portfolio_export.js');
   const ok3 = runScript('convert_deep_value.js');
   const ok4 = runScript('fetch_commodities.js');
+  const ok5 = runScript('create_dividend_calendar.js');
+  const ok6 = runScript('create_risk_assessment.js');
 
-  if (ok1 && ok2 && ok3 && ok4) {
+  if (ok1 && ok2 && ok3 && ok4 && ok5 && ok6) {
     console.log(`\n${G}${BOLD}✅ Daily workflow complete. Run 'npm run check' before trading.${X}\n`);
   }
-  process.exit(ok1 && ok2 && ok3 && ok4 ? 0 : 1);
+  process.exit(ok1 && ok2 && ok3 && ok4 && ok5 && ok6 ? 0 : 1);
 }
 
 // ─── Mode: Poll for AI-generated JSON files ──────────────────────────────
@@ -152,15 +156,17 @@ const interval = setInterval(() => {
     const ok2 = runScript('create_portfolio_export.js');
     const ok3 = runScript('convert_deep_value.js');
     const ok4 = runScript('fetch_commodities.js');
+    const ok5 = runScript('create_dividend_calendar.js');
+    const ok6 = runScript('create_risk_assessment.js');
 
-    if (ok1 && ok2 && ok3 && ok4) {
+    if (ok1 && ok2 && ok3 && ok4 && ok5 && ok6) {
       console.log(`\n${G}${BOLD}✅ Daily workflow complete!${X}`);
       console.log(`${G}   Reports saved to reports/${TODAY}/${X}`);
       console.log(`${G}   Shortcuts updated in reports/Latest_Report.md and reports/Latest_Portfolio.xlsx${X}`);
       console.log(`\n${Y}► Run 'npm run check' before placing any order.${X}\n`);
     }
     
-    process.exit(ok1 && ok2 && ok3 && ok4 ? 0 : 1);
+    process.exit(ok1 && ok2 && ok3 && ok4 && ok5 && ok6 ? 0 : 1);
   }
 }, POLL_MS);
 

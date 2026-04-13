@@ -50,7 +50,8 @@ function readAvailableMargin() {
     } catch (err) {
         logger.warn(`Could not read margin snapshot: ${err.message}`);
     }
-    return portfolioData?.available_margin || 0;
+    // Fallback: try portfolioData first, then config
+    return portfolioData?.available_margin ?? config.portfolio.defaultAvailableMargin ?? 0;
 }
 
 const portfolioData  = readRawJSON(`${reportDate}_portfolio_snapshot.json`);
@@ -107,17 +108,26 @@ if (!actionsFound) {
 
 // 2. Portfolio Snapshot
 if (portfolioData) {
-    md += '## 📊 Portfolio Snapshot\n\n';
-    md += `- **Total Value**: ₹${(portfolioData.total_value || 0).toLocaleString('en-IN')}\n`;
-    md += `- **Day P&L**: ₹${(portfolioData.day_pnl || 0).toLocaleString('en-IN')} (${(portfolioData.day_pnl_pct || 0).toFixed(2)}%)\n`;
-    md += `- **Total P&L**: ₹${(portfolioData.total_pnl || 0).toLocaleString('en-IN')} (${(portfolioData.total_pnl_pct || 0).toFixed(2)}%)\n`;
-    md += `- **Available Cash/Margin**: ₹${readAvailableMargin().toLocaleString('en-IN')}\n\n`;
+    // Calculate totals from holdings if not provided
+    const holdings = portfolioData.holdings || [];
+    const calculatedTotalValue = portfolioData.total_value ?? holdings.reduce((sum, h) => sum + ((h.value || h.current_value || 0) * (h.quantity || 1)), 0);
+    const dayPnl = portfolioData.day_pnl ?? holdings.reduce((sum, h) => sum + ((h.current_price || h.last_price || 0) - (h.close_price || h.current_price || h.last_price || 0)) * (h.quantity || h.qty || 0), 0);
+    const dayPnlPct = portfolioData.day_pnl_pct ?? (calculatedTotalValue ? (dayPnl / calculatedTotalValue) * 100 : 0);
+    const totalPnl = portfolioData.total_pnl ?? holdings.reduce((sum, h) => sum + (h.pnl || 0), 0);
+    const totalPnlPct = portfolioData.total_pnl_pct ?? (calculatedTotalValue ? (totalPnl / calculatedTotalValue) * 100 : 0);
+    const availableMargin = readAvailableMargin();
     
-    if (portfolioData.holdings && portfolioData.holdings.length > 0) {
+    md += '## 📊 Portfolio Snapshot\n\n';
+    md += `- **Total Value**: ₹${(calculatedTotalValue || 0).toLocaleString('en-IN')}\n`;
+    md += `- **Day P&L**: ₹${(dayPnl || 0).toLocaleString('en-IN')} (${(dayPnlPct || 0).toFixed(2)}%)\n`;
+    md += `- **Total P&L**: ₹${(totalPnl || 0).toLocaleString('en-IN')} (${(totalPnlPct || 0).toFixed(2)}%)\n`;
+    md += `- **Available Cash/Margin**: ₹${(availableMargin || 0).toLocaleString('en-IN')}\n\n`;
+    
+    if (holdings.length > 0) {
         md += '### Holdings\n\n';
         md += '| Symbol | Qty | Avg Price | CMP | P&L % | Status |\n';
         md += '|--------|-----|-----------|-----|-------|--------|\n';
-        portfolioData.holdings.forEach(h => {
+        holdings.forEach(h => {
             const pnlPct = h.pnl_percent || h.pnl_pct || 0;
             const status = pnlPct < -15 ? 'CRITICAL' : (pnlPct > 20 ? 'PROFIT' : 'HOLD');
             md += `| **${h.symbol}** | ${h.quantity || h.qty} | ₹${h.average_price || h.avg_price} | ₹${h.current_price || h.last_price} | ${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(2)}% | ${status} |\n`;

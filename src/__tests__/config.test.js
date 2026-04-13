@@ -127,6 +127,13 @@ describe('config', () => {
         test('defaultAvailableMargin is null and sourced from Kite snapshot', () => {
             expect(config.portfolio.defaultAvailableMargin).toBeNull();
         });
+
+        test('dividend calendar generator exists', () => {
+            const fs = require('fs');
+            const path = require('path');
+            const filePath = path.join(__dirname, '../../src/create_dividend_calendar.js');
+            expect(fs.existsSync(filePath)).toBe(true);
+        });
     });
 
     describe('export defaults', () => {

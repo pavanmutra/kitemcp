@@ -158,7 +158,7 @@ describe('Data row validation', () => {
 
 describe('Input file existence', () => {
     test('input markdown file exists', () => {
-        const inputFile = path.join(__dirname, '../../indian_deep_value_stocks.md');
+        const inputFile = path.join(__dirname, '../../prompts/indian_deep_value_stocks.md');
         const exists = fs.existsSync(inputFile);
         expect(exists).toBe(true);
     });

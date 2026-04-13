@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 function convertDeepValueMarkdown() {
-  const inputFile = path.join(__dirname, '../indian_deep_value_stocks.md');
+  const inputFile = path.join(__dirname, '../prompts/indian_deep_value_stocks.md');
   const outputFile = path.join(__dirname, '../reports/deep_value_screener.json');
 
   if (!fs.existsSync(inputFile)) {

@@ -18,6 +18,48 @@ BEFORE any operation:
 
 ---
 
+### ❌ MISTAKE P-015 — Aurobindo Pharma Symbol Mismatch (AUROBINDO vs APLLTD)
+```
+DATE     : 2026-04-09
+WHAT HAPPENED:
+  Tried to place GTT for AUROBINDO (buyback stock). Kite search returned no results
+  for "AUROBINDO" but found "APLLTD" as Aurobindo Pharma. Placed GTT on APLLTD instead.
+  This is correct - the NSE ticker for Aurobindo Pharma is APLLTD, not AUROBINDO.
+
+ROOT CAUSE:
+  Assumed stock symbol matches company name prefix. Aurobindo Pharma = AUROBINDO is wrong.
+  Actual NSE ticker is APLLTD (based on old name: Aurobindo Pharma Ltd).
+
+⛔ NEVER DO:
+  Assume NSE ticker from company name without verification.
+  Search kite before placing orders.
+
+✅ FIX / RULE ADDED:
+  ALWAYS verify exact NSE ticker via kite_search_instruments before placing orders.
+  Company name "Aurobindo Pharma" → NSE ticker "APLLTD"
+  This is a known exception - verify every stock.
+```
+```
+DATE     : 2026-04-07
+WHAT HAPPENED:
+  The deep-value screener prompt and its source markdown lived at the repo root.
+  That made the workflow harder to discover and easy to break when prompt files moved.
+
+ROOT CAUSE:
+  Prompt assets were not kept under the canonical prompts/ folder.
+
+⛔ NEVER DO:
+  Add new agent prompts or prompt-specific source markdown at the repository root.
+
+✅ FIX / RULE ADDED:
+  Store deep-value screener assets under prompts/:
+    - prompts/deep_value_screener_prompts.md
+    - prompts/indian_deep_value_stocks.md
+  Update converter/tests to reference the prompts/ paths only.
+```
+
+---
+
 ## 🔴 CRITICAL MISTAKES (Caused Real Money Loss)
 
 ---
@@ -489,6 +531,31 @@ ROOT CAUSE:
 ```
 
 ---
+
+### ❌ MISTAKE T-014 — Total P&L Showing Day P&L Value in Report
+```
+DATE     : 2026-04-13
+WHAT HAPPENED:
+  Daily report showed same value for "Day P&L" and "Total P&L" lines.
+  Both showed -₹6,305 (day loss) instead of day loss and total profit separately.
+
+ROOT CAUSE:
+  create_master_markdown.js used day_pnl for both calculations:
+    const calculatedPnl = portfolioData.day_pnl ?? portfolioData.total_pnl ...
+  This made both lines show the same value.
+
+⛔ NEVER DO:
+  Reuse the same variable for different metrics in the same report.
+  Assume one calculation works for multiple display fields.
+
+✅ FIX / RULE ADDED:
+  create_master_markdown.js now has separate variables:
+    const dayPnl = portfolioData.day_pnl ?? ...;
+    const totalPnl = portfolioData.total_pnl ?? ...;
+  Line 120: Day P&L uses dayPnl
+  Line 121: Total P&L uses totalPnl
+  Both metrics now display correctly.
+```
 
 ### ❌ MISTAKE T-013 — Jest Test Setup Issues
 ```
@@ -1013,11 +1080,14 @@ These rules are auto-checked by agents. Any violation = hard stop.
  37  Dashboard data is stale until AI refresh completes  T-010
  38  Compute missing fields client-side (qty×price)      T-012
  39  Use flexible field mapping for T+1 pending stocks   T-012
-40  Mock process.exit before require() in Jest tests    T-013
-41  Test files with guard if require.main===module      T-013
-42  Use typeof check not Array.isArray for null guard   T-013
-43  Use total_value (not total_market_value) for dashboard  T-014
- ─────────────────────────────────────────────────────────────────────
+ 40  Mock process.exit before require() in Jest tests    T-013
+ 41  Test files with guard if require.main===module      T-013
+ 42  Use typeof check not Array.isArray for null guard   T-013
+ 43  Use total_value (not total_market_value) for dashboard  T-014
+ 44  ALWAYS verify NSE ticker via kite_search before orders  P-015
+ 45  Delete stale GTTs when no holding exists              P-016
+ 46  Buyback calendar with current prices and premium     P-017
+  ─────────────────────────────────────────────────────────────────────
 ```
 
 ---

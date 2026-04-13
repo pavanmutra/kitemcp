@@ -184,6 +184,10 @@ function normalizeOpportunities(data) {
     return { ...data, opportunities };
 }
 
+function loadDividendCalendar(date) {
+    return readReportJSON(date, `${date}_dividend_calendar.json`);
+}
+
 /**
  * GET /api/dates - Get available report dates
  */
@@ -345,6 +349,15 @@ router.get('/deep-value', (req, res) => {
     } catch (e) {
         res.status(500).json({ error: 'Error reading deep value data' });
     }
+});
+
+/**
+ * GET /api/dividend-calendar - Get dividend/buyback calendar
+ */
+router.get('/dividend-calendar', (req, res) => {
+    const available = getAvailableDates();
+    const date = req.query.date || (available.length > 0 ? available[0] : new Date().toISOString().split('T')[0]);
+    res.json(loadDividendCalendar(date));
 });
 
 /**

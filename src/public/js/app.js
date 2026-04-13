@@ -63,6 +63,11 @@
         // Deep discounts
         discountsGrid: document.getElementById('discountsGrid'),
         discountCount: document.getElementById('discountCount'),
+        mosAlertPanel: document.getElementById('mosAlertPanel'),
+        mosAlertCount: document.getElementById('mosAlertCount'),
+        riskGrid: document.getElementById('riskGrid'),
+        concentrationGrid: document.getElementById('concentrationGrid'),
+        calendarGrid: document.getElementById('calendarGrid'),
         
         // GTT
         protectedCount: document.getElementById('protectedCount'),
@@ -122,6 +127,108 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function renderRiskTracker(data) {
+        if (!elements.riskGrid) return;
+        const holdings = data?.portfolio?.holdings || [];
+        const riskItems = holdings.map(h => {
+            const qty = h.quantity || h.qty || h.t1_quantity || 0;
+            const avg = h.average_price || h.avg_price || 0;
+            const cmp = h.current_price || h.last_price || 0;
+            const stopLoss = avg ? avg * 0.88 : 0;
+            const maxDrawdown = avg ? ((cmp - stopLoss) / avg) * 100 : 0;
+            return {
+                symbol: h.symbol,
+                qty,
+                stopLoss,
+                maxDrawdown,
+                riskLevel: maxDrawdown > 20 ? 'HIGH' : maxDrawdown > 10 ? 'MEDIUM' : 'LOW'
+            };
+        });
+
+        if (!riskItems.length) {
+            elements.riskGrid.innerHTML = '<p class="empty-state">Risk data not available.</p>';
+            return;
+        }
+
+        elements.riskGrid.innerHTML = riskItems.map(item => `
+            <article class="risk-card">
+                <div class="risk-card-top">
+                    <strong>${escapeHtml(item.symbol)}</strong>
+                    <span class="risk-pill risk-${item.riskLevel.toLowerCase()}">${item.riskLevel}</span>
+                </div>
+                <div class="risk-card-body">
+                    <span>Qty: ${item.qty}</span>
+                    <span>Stop-Loss: ₹${item.stopLoss.toFixed(2)}</span>
+                    <span>Max Drawdown: ${item.maxDrawdown.toFixed(1)}%</span>
+                </div>
+            </article>
+        `).join('');
+    }
+
+    function renderConcentrationView(data) {
+        if (!elements.concentrationGrid) return;
+        const holdings = data?.portfolio?.holdings || [];
+        if (!holdings.length) {
+            elements.concentrationGrid.innerHTML = '<p class="empty-state">Concentration data not available.</p>';
+            return;
+        }
+
+        const stockExposure = holdings.map(h => {
+            const qty = h.quantity || h.qty || h.t1_quantity || 0;
+            const price = h.current_price || h.last_price || 0;
+            return { symbol: h.symbol, exposure: qty * price };
+        }).sort((a, b) => b.exposure - a.exposure);
+
+        const total = stockExposure.reduce((sum, item) => sum + item.exposure, 0) || 1;
+
+        elements.concentrationGrid.innerHTML = stockExposure.map(item => `
+            <article class="concentration-card">
+                <div class="concentration-top">
+                    <strong>${escapeHtml(item.symbol)}</strong>
+                    <span>${((item.exposure / total) * 100).toFixed(1)}%</span>
+                </div>
+                <div class="concentration-bar"><span style="width:${Math.min(100, (item.exposure / total) * 100)}%"></span></div>
+                <div class="concentration-meta">₹${item.exposure.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+            </article>
+        `).join('');
+    }
+
+    async function renderDividendCalendar() {
+        if (!elements.calendarGrid) return;
+        const data = await fetchAPI(`/dividend-calendar?date=${state.currentDate}`);
+        if (!data) {
+            elements.calendarGrid.innerHTML = '<p class="empty-state">Calendar data not available.</p>';
+            return;
+        }
+
+        const items = (data.buybacks || []).map(item => ({ ...item, label: 'Buyback' }));
+
+        if (!items.length) {
+            elements.calendarGrid.innerHTML = '<p class="empty-state">No buyback events found on Chittorgarh.</p>';
+            return;
+        }
+
+        elements.calendarGrid.innerHTML = `
+            <div class="calendar-source">Source: ${escapeHtml(data.sources?.buybacks || 'Chittorgarh buyback calendar')}</div>
+            <div class="calendar-cards">
+                ${items.map(item => `
+                    <article class="calendar-card">
+                        <div class="calendar-card-top">
+                            <strong>${escapeHtml(item.symbol)}</strong>
+                            <span class="calendar-pill calendar-${item.label.toLowerCase()}">${item.label}</span>
+                        </div>
+                        <div class="calendar-card-body">
+                            ${item.current_price ? `<div>CMP: ₹${item.current_price.toLocaleString('en-IN')}</div>` : ''}
+                            ${item.buyback_price ? `<div>Buyback: ₹${item.buyback_price} (${item.premium_pct || '--'}% premium)</div>` : ''}
+                            <div>Record: ${escapeHtml(item.record_date || '--')}</div>
+                            <div>${escapeHtml(item.note || 'Buyback calendar entry')}</div>
+                        </div>
+                    </article>
+                `).join('')}
+            </div>
+        `;
     }
 
     // ============================================
@@ -271,6 +378,45 @@
             pnlCard.classList.remove('positive', 'negative');
             pnlCard.classList.add(totalPnl >= 0 ? 'positive' : 'negative');
         }
+    }
+
+    function renderMosAlerts(data) {
+        const portfolio = data?.portfolio;
+        const alerts = (portfolio?.holdings || [])
+            .filter(h => (h.mos_pct ?? h.margin_of_safety_pct ?? 0) >= 25)
+            .map(h => ({
+                symbol: h.symbol,
+                currentPrice: h.current_price || h.last_price || 0,
+                intrinsicValue: h.intrinsic_value_avg || h.intrinsic_value || 0,
+                mos: h.mos_pct ?? h.margin_of_safety_pct ?? 0
+            }))
+            .sort((a, b) => b.mos - a.mos);
+
+        if (elements.mosAlertCount) {
+            elements.mosAlertCount.textContent = alerts.length;
+        }
+
+        if (!elements.mosAlertPanel) {
+            return;
+        }
+
+        if (!alerts.length) {
+            elements.mosAlertPanel.innerHTML = '<p class="empty-state">No MoS alerts available.</p>';
+            return;
+        }
+
+        elements.mosAlertPanel.innerHTML = alerts.map(alert => `
+            <article class="mos-alert-card">
+                <div class="mos-alert-top">
+                    <strong>${escapeHtml(alert.symbol)}</strong>
+                    <span>${alert.mos.toFixed(1)}% MoS</span>
+                </div>
+                <div class="mos-alert-body">
+                    <span>CMP: ₹${alert.currentPrice.toFixed(2)}</span>
+                    <span>IV: ₹${alert.intrinsicValue.toFixed(0)}</span>
+                </div>
+            </article>
+        `).join('');
     }
 
     // ============================================
@@ -658,10 +804,14 @@
                 else if (numScore >= 6) scoreClass = 'text-warning';
             }
 
+            const ticker = d.ticker || '';
+            const tradingviewUrl = `https://in.tradingview.com/?symbol=NSE:${ticker}`;
+            const screenerUrl = `https://www.screener.in/company/${ticker}/`;
+
             return `
                 <tr>
-                    <td>${escapeHtml(d.company)}</td>
-                    <td class="symbol-cell">${escapeHtml(d.ticker)}</td>
+                    <td><a href="${screenerUrl}" target="_blank" class="dv-link" title="View on Screener.in">${escapeHtml(d.company)}</a></td>
+                    <td class="symbol-cell"><a href="${tradingviewUrl}" target="_blank" class="dv-link" title="View on TradingView">${escapeHtml(d.ticker)}</a></td>
                     <td><span class="badge badge-outline">${escapeHtml(d.category)}</span></td>
                     <td class="text-right">${(d.pe || 0).toFixed(1)}</td>
                     <td class="text-right">${(d.pb || 0).toFixed(2)}</td>
@@ -708,6 +858,10 @@
         state.dashboardData = data;
         
         try { renderSummaryCards(data); } catch(e) { console.error('Error rendering summary cards:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
+        try { renderMosAlerts(data); } catch(e) { console.error('Error rendering MoS alerts:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
+        try { renderRiskTracker(data); } catch(e) { console.error('Error rendering risk tracker:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
+        try { renderConcentrationView(data); } catch(e) { console.error('Error rendering concentration view:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
+        try { renderDividendCalendar(); } catch(e) { console.error('Error rendering dividend calendar:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
         try { renderHoldingsTable(data); } catch(e) { console.error('Error rendering holdings table:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
         try { renderDeepDiscounts(data); } catch(e) { console.error('Error rendering deep discounts:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
         try { renderGTTStatus(data); } catch(e) { console.error('Error rendering GTT status:', e); if(dbg) dbg.innerHTML += "<br>Error: " + e; }
